@@ -2,6 +2,7 @@
   "name": "aloha-assistant",
   "private": true,
   "version": "0.1.0",
+  "packageManager": "npm@10.9.2",
   "workspaces": [
     "apps/*",
     "workers/*",
@@ -14,7 +15,9 @@
     "dev:web": "npm run dev -w @aloha/web",
     "dev:gateway": "npm run dev -w @aloha/gateway",
     "dev:agent": "npm run dev -w @aloha/agent",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
     "build:web": "npm run build -w @aloha/web",
-    "typecheck": "npm run typecheck --workspaces --if-present"
+    "check": "npm run typecheck && npm run build"
   }
 }
