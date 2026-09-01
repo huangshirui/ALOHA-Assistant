@@ -1,5 +1,9 @@
+interface AgentBinding {
+  fetch(request: Request): Promise<Response>
+}
+
 interface Env {
-  AGENT?: Fetcher
+  AGENT?: AgentBinding
 }
 
 const json = (value: unknown, status = 200) =>
