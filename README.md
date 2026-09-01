@@ -35,6 +35,20 @@ docs/
   architecture.md       # current repository boundaries and data flow
 ```
 
+## Getting started
+
+```bash
+npm install
+npm run dev:web
+```
+
+Run Workers separately when needed:
+
+```bash
+npm run dev:gateway
+npm run dev:agent
+```
+
 ## Principles
 
 1. ALOHA Assistant is a personal Agent product, not a multi-assistant platform.
