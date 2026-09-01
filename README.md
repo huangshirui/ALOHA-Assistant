@@ -4,6 +4,17 @@ ALOHA Assistant is a personal AI assistant and the primary personal interaction 
 
 This repository contains the product-facing PWA, the thin gateway, the ALOHA Agent Runtime, and ALOHA-specific capability adapters/contracts. Shared infrastructure such as LifeSpace, Relay, Poina, Facet, and HomeMew remains outside this repository.
 
+## Read before changing the repository
+
+Start with `AGENTS.md`, then read the nearest nested `AGENTS.md` for the area being changed.
+
+Current sources of truth:
+
+- `README.md` — product boundary and MVP target
+- `docs/architecture.md` — current runtime/repository architecture
+- `docs/development.md` — toolchain, validation and lockfile baseline
+- `packages/contracts` — shared ALOHA interaction/capability protocol types
+
 ## MVP
 
 The first milestone proves the complete path:
@@ -33,6 +44,7 @@ packages/
   capabilities/         # ALOHA capability registry and adapters
 docs/
   architecture.md       # current repository boundaries and data flow
+  development.md        # local toolchain and validation baseline
 ```
 
 ## Getting started
@@ -47,6 +59,12 @@ Run Workers separately when needed:
 ```bash
 npm run dev:gateway
 npm run dev:agent
+```
+
+Validate the complete repository scaffold with:
+
+```bash
+npm run check
 ```
 
 ## Principles
