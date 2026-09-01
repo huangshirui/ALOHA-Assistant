@@ -15,7 +15,7 @@ export default {
     }
 
     if (url.pathname === '/v1/interactions' && request.method === 'POST') {
-      const input = await request.json<InteractionInput>()
+      const input = (await request.json()) as InteractionInput
       const output: InteractionOutput = {
         requestId: input.requestId ?? crypto.randomUUID(),
         kind: 'message',
