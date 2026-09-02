@@ -1,0 +1,17 @@
+{
+  "name": "@aloha/runtime-n8n",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "exports": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@aloha/contracts": "*"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2"
+  }
+}
