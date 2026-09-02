@@ -1,6 +1,0 @@
-{
-  "$schema": "../../node_modules/wrangler/config-schema.json",
-  "name": "aloha-agent",
-  "main": "src/index.ts",
-  "compatibility_date": "2026-09-01"
-}
