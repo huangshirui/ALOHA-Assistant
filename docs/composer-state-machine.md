@@ -1,6 +1,6 @@
 # Composer state machine and test baseline
 
-> Status: **Feature Spec Complete for the core Composer behavior**. This file defines intended Composer behavior and the implementation-test baseline. It does not claim the behavior is already implemented or verified.
+> Status: **Feature Spec Complete（功能规格完整） for the Composer and run-interruption interaction contract**. This file defines intended behavior and the implementation-test baseline. It does not claim the behavior is already implemented or verified.
 
 ## Model
 
@@ -45,6 +45,8 @@ type PendingResource = {
   id: string
   kind: 'image' | 'file' | string
   status: 'uploading' | 'ready' | 'failed'
+  sizeBytes?: number
+  mimeType?: string
 }
 ```
 
@@ -57,13 +59,17 @@ hasValidText       = trim(textDraft).length > 0
 hasResources       = pendingResources.length > 0
 hasVoiceText       = trim(voiceTranscriptBuffer).length > 0
 allResourcesReady  = every pending resource has status=ready
+resourceCountValid = pendingResources.length <= 10
+resourceSizesValid = every resource size <= 20 MB
 isVoiceActive      = state is Compact.VoiceCapturing or Expanded.Dictating
 canSend            = state is Expanded.Ready
                      and (hasValidText or hasResources)
                      and allResourcesReady
+                     and resourceCountValid
+                     and resourceSizesValid
 ```
 
-If any pending resource is Uploading, Send is disabled. Failed resources are never treated as Ready.
+If any pending resource is Uploading, Send is disabled. Failed, unsupported or over-limit resources are never treated as Ready.
 
 ## Invariants（不变量）
 
@@ -84,7 +90,14 @@ If any pending resource is Uploading, Send is disabled. Failed resources are nev
 15. **Failure is lossless**: if a Submission is not accepted, text and resources are recoverable together.
 16. **Working does not lock Composer**: a next-turn draft may be prepared while Surface is Working.
 17. **Accepted next-turn Submission interrupts current Working run**: it supersedes the current run rather than queueing behind it.
-18. **Stop is best-effort, not rollback**: committed external side effects are not silently undone.
+18. **New-request acceptance precedes old-run cancellation**: a failed replacement request must not kill the old run.
+19. **Superseded late output never wins the active surface**: late output from an old run may enter History / Trace but cannot overwrite the new Current Work Surface.
+20. **Stop is best-effort, not rollback**: committed external side effects are not silently undone.
+21. **Stopped/superseded partial output is retained**: already rendered progressive content remains visible with a terminal marker.
+22. **Resource limits are enforced before submission**: MVP permits at most 10 resources, each at most 20 MB, from the supported resource families.
+23. **Original image identity is preserved**: thumbnails/optimized derivatives may be generated separately; transport must not silently replace the original resource with a destructive compressed substitute.
+24. **Gesture semantics are stable, thresholds are tunable**: initial long-press and swipe thresholds may be tuned without changing the state-machine meaning.
+25. **Voice entry/edit transition provides Haptic feedback where supported**.
 
 ## Events and transitions
 
@@ -93,13 +106,16 @@ If any pending resource is Uploading, Send is disabled. Failed resources are nev
 | Event | Guard | Target | Actions |
 | --- | --- | --- | --- |
 | `TAP_CENTER` | - | `Expanded.Ready` | focus editor; open keyboard |
-| `LONG_PRESS_CENTER` | permission=granted | `Compact.VoiceCapturing` | start STT; clear voice buffer; show overlay |
+| `LONG_PRESS_CENTER` | permission=granted and threshold met | `Compact.VoiceCapturing` | start STT; clear voice buffer; show overlay; light Haptic |
 | `LONG_PRESS_CENTER` | permission=unknown | remain | request permission; do not start STT |
 | `LONG_PRESS_CENTER` | permission=denied | remain | show permission guidance; preserve resources |
-| `CAMERA_ADD_SUCCESS` | - | remain | add resource |
-| `RESOURCE_ADD_SUCCESS` | - | remain | add resource |
+| `CAMERA_ADD_SUCCESS` | resource allowed and limits valid | remain | add resource |
+| `RESOURCE_ADD_SUCCESS` | resource allowed and limits valid | remain | add resource |
+| `RESOURCE_ADD_REJECTED` | unsupported / over-count / over-size | remain | show validation feedback; do not add as Ready |
 
 Permission resolution never continues the original gesture automatically. After grant, remain stable and require another long-press.
+
+Initial gesture parameter: approximately **400 ms** long-press activation. Treat this as a tunable UX parameter, not a transport/protocol constant.
 
 ### Compact.VoiceCapturing（Mobile / Tablet only）
 
@@ -108,18 +124,21 @@ Permission resolution never continues the original gesture automatically. After 
 | `STT_UPDATE` | - | remain | update `voiceTranscriptBuffer`; render overlay |
 | `RELEASE` | `hasVoiceText` | `Submitting` | build Submission from voice text + pending resources |
 | `RELEASE` | no voice text | `Compact.Idle` | stop STT; close overlay; preserve resources; no submit |
-| `SWIPE_UP` | `hasVoiceText` | `Expanded.Ready` | stop STT; move text to editor; caret at end; focus; open keyboard |
-| `SWIPE_UP` | no voice text | `Compact.Idle` | stop STT; close overlay; no keyboard |
+| `SWIPE_UP` | `hasVoiceText` and edit threshold met | `Expanded.Ready` | stop STT; move text to editor; caret at end; focus; open keyboard; light Haptic |
+| `SWIPE_UP` | no voice text and edit threshold met | `Compact.Idle` | stop STT; close overlay; no keyboard; light Haptic |
 | `STT_ERROR` | - | `Compact.Idle` | do not auto-send partial text; preserve resources; show error |
 
 There is no independent Cancel gesture in the MVP transition contract.
+
+Initial swipe-up edit threshold: approximately **60 px** vertical displacement. Treat this as tunable after real-device testing.
 
 ### Expanded.Ready（all devices）
 
 | Event | Guard | Target | Actions |
 | --- | --- | --- | --- |
 | `TEXT_CHANGE` | - | remain | update draft |
-| `RESOURCE_ADD_SUCCESS` | - | remain | add resource; show pending area |
+| `RESOURCE_ADD_SUCCESS` | resource allowed and limits valid | remain | add resource; show pending area |
+| `RESOURCE_ADD_REJECTED` | unsupported / over-count / over-size | remain | show validation feedback; preserve current draft/resources |
 | `RESOURCE_UPLOAD_UPDATE` | - | remain | update resource status; recompute `canSend` |
 | `RESOURCE_REMOVE` | - | remain | remove resource; hide area if empty |
 | `TAP_RESOURCE` | - | remain | preview resource |
@@ -172,16 +191,46 @@ Surface.Working -----------------------> Surface.Result
 Composer is available for the next draft while Surface.Working.
 ```
 
-### Working concurrency
+### Working concurrency and interruption protocol
 
 - the user may type, dictate, attach resources and prepare the next draft while the current run is Working;
 - explicit Stop is available on the Working interaction;
-- if the user sends a new Submission and that Submission is accepted, the current Working run is interrupted/superseded and the new instruction begins immediately;
-- the new instruction is not queued behind the previous run;
+- a new Submission sent during Working is an interrupting candidate, not a queued follow-up;
+- the old run continues while the new Submission is being admitted;
+- **only after the new Submission is accepted** is the old run marked Superseded and best-effort cancellation requested;
+- if the new Submission is rejected/not accepted, the old run continues normally;
+- after supersession, late output from the old run may be stored in History / Trace but must never overwrite the active Current Work Surface for the new run;
 - interruption/Stop cancels work that is still cancellable, but does not imply rollback of external side effects already committed;
 - Current Work Surface shows meaningful process state and progressively renders usable output as it becomes available; private chain-of-thought is never exposed.
 
-The exact acceptance/cancellation ordering for a new interrupting Submission remains a Product TBD and must be resolved before protocol implementation.
+### Stopped / superseded presentation contract
+
+- progressive output already rendered before termination remains visible;
+- explicit user Stop adds a **Stopped（已停止）** terminal marker;
+- replacement by an accepted new instruction adds a **Superseded（已被新指令中断）** terminal marker to the old run;
+- after the terminal marker, that run may not append further content to the active Current Work Surface;
+- committed external effects remain visible facts even if the run was later stopped/interrupted.
+
+## MVP resource policy
+
+Supported families for the first MVP:
+
+- common web/mobile image formats;
+- PDF;
+- plain-text documents;
+- Markdown documents.
+
+Deferred: Office document families and broader arbitrary-file support.
+
+Limits:
+
+- maximum **10 resources** in one Submission;
+- maximum **20 MB per resource**;
+- unsupported/over-limit resources are rejected before becoming Ready;
+- image previews may use separate generated thumbnails;
+- the original uploaded resource identity/content must not be silently replaced by a destructive compressed derivative merely for UI or transport convenience.
+
+The exact MIME / extension allow-list within these families is an implementation detail that must be explicit in code/config and tests once the upload stack is selected.
 
 ## Formal test cases
 
@@ -216,24 +265,30 @@ The exact acceptance/cancellation ordering for a new interrupting Submission rem
 | RES-009 | Common | no text; ready resource exists | observe Send | Send enabled |
 | RES-010 | Mobile/Tablet only | Compact + resources | tap center | Expanded opens; resources remain above editor |
 | RES-011 | Common | at least one resource Uploading | observe Send | Send disabled |
-| RES-012 | Common | last Uploading resource becomes Ready; draft/resource payload valid | upload completes | Send recomputes to enabled |
+| RES-012 | Common | last Uploading resource becomes Ready; payload valid | upload completes | Send recomputes to enabled |
+| RES-013 | Common | 10 resources already pending | add an 11th | resource is rejected; existing 10 and text draft preserved |
+| RES-014 | Common | selected resource > 20 MB | add | resource is rejected before Ready; clear validation feedback |
+| RES-015 | Common | unsupported resource family | add | resource is rejected; existing draft/resources preserved |
+| RES-016 | Common | image accepted | render pending preview | lightweight thumbnail may be used; original resource remains the submission identity/source |
 
 ### VCP — Compact long-press voice
 
 | ID | Scope | Scenario | Action | Expected |
 | --- | --- | --- | --- | --- |
-| VCP-001 | Mobile/Tablet only | Compact; permission granted | long-press | enters VoiceCapturing; STT starts |
-| VCP-002 | Mobile/Tablet only | VoiceCapturing | speech recognized | live text in overlay above Composer |
-| VCP-003 | Mobile/Tablet only | resources pending | voice input | resources unchanged |
-| VCP-004 | Mobile/Tablet only | recognized text; no resources | release | immediate text Submission |
-| VCP-005 | Mobile/Tablet only | recognized text + resources | release | one mixed Submission |
-| VCP-006 | Mobile/Tablet only | no recognized text; no resources | release | no Submission; Compact idle |
-| VCP-007 | Mobile/Tablet only | no recognized text; resources | release | no Submission; resources remain |
-| VCP-008 | Mobile/Tablet only | recognized text | swipe up | Expanded.Ready; text inserted; caret at end; keyboard opens |
-| VCP-009 | Mobile/Tablet only | no recognized text | swipe up | Compact; no empty editor/keyboard |
-| VCP-010 | Mobile/Tablet only | recognized text + resources | swipe up | Expanded text + resources remain separate |
-| VCP-011 | Mobile/Tablet only | permission unknown | first long-press | permission requested; STT does not start |
-| VCP-012 | Mobile/Tablet only | permission grant completes | release/system prompt closes | remain stable; require a second explicit long-press to start voice |
+| VCP-001 | Mobile/Tablet only | Compact; permission granted | hold less than long-press threshold | voice capture does not activate |
+| VCP-002 | Mobile/Tablet only | Compact; permission granted | hold through ~400 ms threshold | enters VoiceCapturing; STT starts; one light Haptic where supported |
+| VCP-003 | Mobile/Tablet only | VoiceCapturing | speech recognized | live text in overlay above Composer |
+| VCP-004 | Mobile/Tablet only | resources pending | voice input | resources unchanged |
+| VCP-005 | Mobile/Tablet only | recognized text; no resources | release | immediate text Submission |
+| VCP-006 | Mobile/Tablet only | recognized text + resources | release | one mixed Submission |
+| VCP-007 | Mobile/Tablet only | no recognized text; no resources | release | no Submission; Compact idle |
+| VCP-008 | Mobile/Tablet only | no recognized text; resources | release | no Submission; resources remain |
+| VCP-009 | Mobile/Tablet only | recognized text; swipe-up threshold met | swipe up | Expanded.Ready; text inserted; caret at end; keyboard opens; light Haptic |
+| VCP-010 | Mobile/Tablet only | no recognized text; swipe-up threshold met | swipe up | Compact; no empty editor/keyboard; light Haptic |
+| VCP-011 | Mobile/Tablet only | recognized text + resources | swipe up | Expanded text + resources remain separate |
+| VCP-012 | Mobile/Tablet only | permission unknown | first long-press | permission requested; STT does not start |
+| VCP-013 | Mobile/Tablet only | permission grant completes | prompt closes | remain stable; require a second explicit long-press to start voice |
+| VCP-014 | Mobile/Tablet only | VoiceCapturing; movement below ~60 px edit threshold | move upward then release | movement alone does not commit edit transition; release semantics remain applicable |
 
 ### VCX — Expanded dictation
 
@@ -283,10 +338,16 @@ The exact acceptance/cancellation ordering for a new interrupting Submission rem
 | --- | --- | --- | --- | --- |
 | WRK-001 | Common | Submission accepted | Surface enters Working | Composer immediately available for next draft |
 | WRK-002 | Common | Surface Working | type/dictate/add resources | next draft may be prepared without mutating the active run |
-| WRK-003 | Common | Surface Working; next draft ready | new Submission accepted | active run is interrupted/superseded; new instruction starts immediately, not queued |
-| WRK-004 | Common | Surface Working | tap Stop | system requests best-effort cancellation; does not create a new Submission |
-| WRK-005 | Common | Surface Working | execution produces status/result chunks | Surface moves from meaningful process state to progressively rendered usable result |
-| WRK-006 | Common | external side effect already committed | Stop / interrupt | UI/runtime must not pretend the committed effect was rolled back automatically |
+| WRK-003 | Common | Surface Working; next draft sent | replacement request pending admission | old run continues until replacement is accepted |
+| WRK-004 | Common | replacement request rejected/not accepted | receive failure | old Working run continues; new draft is recoverable; old run was not killed |
+| WRK-005 | Common | replacement request accepted | acceptance | old run marked Superseded; cancellation requested; new run becomes active immediately, not queued |
+| WRK-006 | Common | old run emits late output after supersession | receive late chunk/result | may enter History/Trace; must not overwrite new active Current Work Surface |
+| WRK-007 | Common | Surface Working | tap Stop | best-effort cancellation requested; no new Submission |
+| WRK-008 | Common | partial progressive output exists | Stop accepted | partial output remains visible and gains Stopped marker; no further active-surface chunks from that run |
+| WRK-009 | Common | partial progressive output exists | replacement accepted | partial old output remains historically visible with Superseded marker; new run owns active Surface |
+| WRK-010 | Common | external side effect already committed | Stop / interrupt | UI/runtime never pretends committed effect was rolled back automatically |
+| WRK-011 | Common | Surface Working | execution produces status/result chunks | Surface moves from meaningful process state to progressively rendered usable result |
+| WRK-012 | Common | run terminally Stopped/Superseded | later stream event arrives | event cannot append to that run's active Current Work Surface presentation |
 
 ### RST — Result completion
 
@@ -295,19 +356,21 @@ The exact acceptance/cancellation ordering for a new interrupting Submission rem
 | RST-001 | Mobile/Tablet only | result complete; no next draft | settle | Composer available from Compact; submitted draft/resources do not reappear |
 | RST-002 | Desktop only | result complete; no next draft | settle | Composer available empty Expanded.Ready; submitted draft/resources do not reappear |
 
-Total formal baseline: **68 test cases**.
+Total formal baseline: **82 test cases**.
 
-## Product TBDs that must not be decided implicitly in code
+## Remaining product decisions
 
-Core Composer behavior is functionally specified. The remaining unresolved items are cross-run/presentation/limits details:
+The functional Composer and interruption semantics are no longer blocked. Remaining items are presentation/detail decisions rather than state-machine gaps:
 
-1. **Interrupt acceptance ordering**: when a new Submission is sent during Working, should the previous run continue until the new Submission is accepted, so a failed new request does not kill the old run?
-2. **Stopped/interrupted Surface presentation**: whether partial progressive output remains visible and how it is marked after Stop / supersede.
-3. **Resource support and limits**: MVP file/image types, per-file size, resource count, and image compression policy.
-4. **Gesture/haptic parameters**: long-press duration, swipe threshold, vibration and animation tuning.
+1. detailed Header iconography and exact current-surface reset / new-context semantics;
+2. final Result Input Source default presentation;
+3. history / prior-work-surface recall entry point;
+4. detailed visual wording/layout for process states and Stopped / Superseded markers;
+5. exact MIME / extension allow-list inside the approved MVP resource families;
+6. final tuning of gesture thresholds / Haptic intensity / animation after real-device testing.
 
 ### Development readiness
 
-- **Composer state machine**: Feature Spec Complete（功能规格完整） for the core interaction behavior.
-- **Run interruption protocol**: Development Ready conceptually, but TBD 1 must be fixed before final client/Gateway/Agent contract semantics are implemented.
-- **Interaction Frozen**: after TBD 2–4 and hands-on UX tuning.
+- **Composer state machine**: Feature Spec Complete（功能规格完整）.
+- **Run interruption contract**: Feature Spec Complete（功能规格完整） at the product/interaction level; Gateway / Agent Runtime implementation must preserve the acceptance-before-cancel ordering and run identity.
+- **Interaction Frozen（交互冻结）**: only after remaining presentation/detail items and hands-on device tuning are finalized.
