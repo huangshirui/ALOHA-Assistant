@@ -4,6 +4,14 @@ ALOHA Assistant is a personal AI assistant and the primary personal interaction 
 
 This repository contains the product-facing PWA, the thin gateway, the ALOHA Agent Runtime, and ALOHA-specific capability adapters/contracts. Shared infrastructure such as LifeSpace, Relay, Poina, Facet, and HomeMew remains outside this repository.
 
+## Open-source repository
+
+ALOHA Assistant is developed as an open-source project. Source code in this repository is licensed under **GNU Affero General Public License v3.0 or later (`AGPL-3.0-or-later`)**; see `LICENSE`.
+
+The public repository contains portable source code, contracts and documentation. It must **not** contain the user's private data, real conversation/memory content, secrets, credentials, production/staging datasets, or non-public live infrastructure identifiers/topology. Examples and fixtures must be synthetic, and deployment secrets/live private configuration must stay outside source control.
+
+Contributors and coding agents must read `AGENTS.md` before making changes. Security-sensitive reports should follow `SECURITY.md` and should never paste secrets or private data into a public issue.
+
 ## Read before changing the repository
 
 Start with `AGENTS.md`, then read the nearest nested `AGENTS.md` for the area being changed.
@@ -81,6 +89,7 @@ npm run check
 4. LifeSpace owns identity/shared reality; ALOHA consumes it through explicit authorization.
 5. Relay, Poina, Facet and notification infrastructure stay independent and are integrated through contracts.
 6. Keep the MVP small, but keep boundaries compatible with later expansion.
+7. Keep private user context and live private infrastructure outside this public repository.
 
 ## Status
 

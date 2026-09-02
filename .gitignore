@@ -1,11 +1,32 @@
 node_modules/
 dist/
+coverage/
 .wrangler/
+
+# Local runtime secrets / environment overrides
 .dev.vars
 .dev.vars.*
+!.dev.vars.example
 .env
 .env.*
 !.env.example
+*.local
+
+# Keys, certificates and credential containers
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Local data and captures that may contain personal information
+*.db
+*.sqlite
+*.sqlite3
+*.har
+
+# Editor / OS / logs
 .DS_Store
 *.log
 .vscode/

@@ -16,3 +16,19 @@ jobs:
       # Switch to npm ci + npm cache after the first package-lock.json is committed.
       - run: npm install
       - run: npm run check
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # A public-release gate must inspect history, not only the current tree.
+          fetch-depth: 0
+      - name: Scan full Git history for secrets
+        # Pin the multi-arch image digest. v8.30.1 is intentionally avoided because
+        # of a reported detection regression; revisit the pin after the regression is resolved.
+        run: >-
+          docker run --rm
+          -v "$GITHUB_WORKSPACE:/repo"
+          ghcr.io/gitleaks/gitleaks:v8.29.1@sha256:aa036a2f4bdfe3cc3c55fa4326308efabb4a6be498c883c864fd1d0d5585438a
+          git --redact --no-banner /repo

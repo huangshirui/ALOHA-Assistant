@@ -4,6 +4,61 @@ ALOHA Assistant is the user's personal Agent product: a personal super-assistant
 
 This repository owns the ALOHA product experience, thin Gateway（网关）, ALOHA Agent Runtime（智能体运行时）, and ALOHA-side Capability（能力）contracts/adapters. LifeSpace, HomeMew, Relay, Poina, Facet, 知了 and other shared infrastructure remain independently owned systems.
 
+## Open-source and public-repository safety model
+
+This is an **open-source project**. Treat every tracked file, commit, branch, pull request, issue, review comment, CI log/artifact, screenshot, fixture, generated example and documentation snippet as if it can become public and permanently indexed.
+
+The repository is source code and public documentation only. It is **not** a storage location for the user's private context or for live infrastructure configuration.
+
+### Never publish private or sensitive data
+
+Do not commit, paste, generate, snapshot, log, fixture, test with, or otherwise expose:
+
+- personal conversations, prompts, memories, emails, contacts, calendars, tasks, files, photos, voice/audio, precise location, identifiers, health/financial/family data, or other real user content;
+- production/staging datasets, exports, database dumps, request/response captures, analytics samples, traces or logs that may contain real user or tenant data;
+- secrets or credentials of any kind: API keys, OAuth client secrets, access/refresh tokens, JWTs, cookies, session values, private keys, webhook secrets, service-account material, passwords, recovery codes or signed URLs;
+- non-public infrastructure details: Cloudflare account/zone/database/namespace/bucket/queue/tunnel identifiers, origin IPs, private hostnames, internal routes, Access audience/team identifiers, deployment-only service topology, provider account identifiers, private repository/document links, or equivalent live resource metadata;
+- values retrieved through connected tools such as Gmail, Google Calendar, Notion, GitHub private resources, LifeSpace, HomeMew or other personal systems unless the value is explicitly intended to be public and is necessary for the repository.
+
+Public product names, intentionally public API contracts and deliberately published endpoints are not automatically sensitive, but prefer placeholders whenever a concrete deployment value is not required to understand or test the code.
+
+### Use synthetic examples only
+
+- Examples, fixtures, tests, screenshots and demo payloads must use invented people, invented content and placeholder infrastructure values.
+- Use reserved/example domains such as `example.com` and clearly fake identifiers such as `<ACCOUNT_ID>` or `00000000000000000000000000000000` where a concrete shape is required.
+- Never "anonymize" a real private payload and then commit it. Build a synthetic payload from scratch.
+- `.env.example`, `.dev.vars.example` and configuration templates may contain variable names and safe placeholders only; never copy a live file and redact it in place.
+
+### Keep live configuration outside the repository
+
+- Runtime secrets must be injected through the deployment platform's secret/configuration mechanism, never source control.
+- Live environment/resource identifiers that reveal private infrastructure should remain in private deployment configuration or secret/config stores rather than this repository.
+- Tracked Wrangler/Vite/config files must contain only portable public configuration or documented placeholders. If a tool requires live identifiers in a local config file, keep the live variant ignored and provide a sanitized template.
+- Do not make a private infrastructure detail public merely to simplify local development or CI.
+
+### AI/Agent-specific handling
+
+Agents working on this repository must assume that retrieved context can contain material that is safe to use for reasoning but unsafe to publish.
+
+Before writing any content obtained from a user conversation, connector, private repository, Notion page, production log or external service into the repository, ask: **is this exact value intentionally public and necessary in source?** If the answer is not clearly yes, replace it with a synthetic example or omit it.
+
+Do not reproduce private context in commit messages, PR bodies, issue text, test snapshots or debugging output. Summarize the technical requirement without copying sensitive source material.
+
+### If sensitive material is found
+
+- Stop propagating the value immediately; do not "fix" the leak by adding another commit that merely deletes it.
+- Treat secrets as compromised: revoke/rotate them before continuing.
+- Treat personal/infrastructure data as persistent in Git history until the history is explicitly cleaned.
+- Before any repository visibility change to public, verify both the current tree and relevant Git history are clean.
+- Report the incident and the remediation status clearly without repeating the sensitive value.
+
+## Licensing and third-party material
+
+- The repository is licensed under **GNU Affero General Public License v3.0 or later (`AGPL-3.0-or-later`)** unless a file explicitly states otherwise.
+- Do not change the project license, add license exceptions, dual-license the project, or introduce incompatible source/assets without explicit project-owner approval.
+- Before copying code, assets, prompts, schemas or substantial text from another project, verify its license is compatible and preserve required notices/attribution.
+- A publicly accessible source is not necessarily open-source or reusable.
+
 ## Read before making changes
 
 Read in this order:
@@ -102,5 +157,7 @@ Do not duplicate a protocol shape independently in multiple workspaces when it b
 ## Change completion
 
 Before declaring a change complete, inspect the coupled surfaces that apply: UI, interaction contract, Gateway, Agent Runtime, Capability registry/adapter, authentication/authorization, streaming/error semantics, docs, tests, deployment configuration and external-system compatibility.
+
+For every change, also perform a **public-repository safety pass** over the diff: confirm that no private user data, credentials, live infrastructure details or non-public connector content was introduced, including in fixtures, logs and documentation.
 
 At minimum run the repository `check` command once it exists for the changed baseline. If a check cannot run because the scaffold is incomplete, state that explicitly and do not describe the unverified behavior as working.
