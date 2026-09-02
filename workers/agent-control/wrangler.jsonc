@@ -1,0 +1,7 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "aloha-agent-control",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01"
+  // Runtime backend bindings/endpoints are configured when a concrete adapter is selected.
+}
