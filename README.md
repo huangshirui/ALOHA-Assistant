@@ -12,6 +12,8 @@ Current sources of truth:
 
 - `README.md` — product boundary and MVP target
 - `docs/architecture.md` — current runtime/repository architecture
+- `docs/pwa-interaction.md` — current PWA interaction/product baseline
+- `docs/composer-state-machine.md` — Composer states, guards, invariants and implementation/test baseline
 - `docs/development.md` — toolchain, validation and lockfile baseline
 - `packages/contracts` — shared ALOHA interaction/capability protocol types
 
@@ -43,8 +45,10 @@ packages/
   contracts/            # transport / interaction / capability contracts
   capabilities/         # ALOHA capability registry and adapters
 docs/
-  architecture.md       # current repository boundaries and data flow
-  development.md        # local toolchain and validation baseline
+  architecture.md              # current repository boundaries and data flow
+  pwa-interaction.md           # PWA interaction/product baseline
+  composer-state-machine.md    # Composer implementation/test specification
+  development.md               # local toolchain and validation baseline
 ```
 
 ## Getting started
