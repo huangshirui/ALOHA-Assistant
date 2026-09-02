@@ -36,6 +36,22 @@ Respond to Webhook
 
 The Chat Model provider is intentionally not frozen by ALOHA. Use an existing supported chat-model credential in the n8n deployment. Provider selection is Runtime configuration, not part of the ALOHA Interaction Protocol.
 
+## Importable bootstrap template
+
+A credential-free template is tracked at:
+
+`examples/n8n/m1-agent-runtime.workflow.json`
+
+Import it into the target n8n instance, then complete only deployment-local configuration:
+
+1. open `ALOHA Runtime Webhook` and attach a Header Auth credential whose value is the deployment secret expected by Agent Control;
+2. open `Example Chat Model`, attach a real model credential, and change the model/provider if desired;
+3. keep `Runtime Think Tool` connected as a Runtime-internal tool only;
+4. validate the `Normalize Runtime Result` output shape;
+5. publish/activate the workflow and use the production Webhook URL for `N8N_AGENT_WEBHOOK_URL`.
+
+The template intentionally includes no credential IDs, credential names, live URLs, private hostnames, user content, or deployment-specific identifiers. The OpenAI Chat Model node is only an importable example; replacing it with another n8n-supported Chat Model does not change the ALOHA Runtime Contract.
+
 ## 1. Webhook
 
 Configure a Webhook trigger:
@@ -139,6 +155,14 @@ Failure cases should also be checked at least once:
 - invalid/missing n8n authentication does not expose backend details to the PWA;
 - n8n 5xx becomes `run.failed` with a safe ALOHA error;
 - malformed n8n JSON becomes `run.failed` rather than leaking provider-native payloads.
+
+After the deployed Gateway and Runtime are configured, the repository verifier can check the canonical event path:
+
+```bash
+ALOHA_GATEWAY_URL=https://gateway.example.com npm run verify:m1-runtime
+```
+
+The verifier sends synthetic text only and expects `run.started -> output.delta -> run.completed` with non-empty output. It intentionally does not contain or print n8n credentials. If the deployed Gateway itself requires additional interactive/access authentication, perform the same acceptance check from the PWA or an appropriately authenticated local environment rather than weakening Gateway authentication for the verifier.
 
 ## Deliberately deferred
 

@@ -20,6 +20,7 @@
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "build:web": "npm run build -w @aloha/web",
+    "verify:m1-runtime": "node scripts/verify-m1-runtime.mjs",
     "check": "npm run typecheck && npm run test && npm run build"
   },
   "devDependencies": {
