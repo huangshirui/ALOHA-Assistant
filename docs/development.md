@@ -93,6 +93,50 @@ At the first local dependency install:
 - `N8N_AGENT_WEBHOOK_URL` is deployment-only runtime configuration even if the endpoint itself is not a credential.
 - `N8N_AGENT_AUTH_TOKEN` is a secret and must use the deployment platform's secret mechanism.
 
+## Cloudflare production deployment
+
+Production deployment is intentionally split from pull-request CI. `.github/workflows/ci.yml` validates pull requests and `main`; `.github/workflows/deploy.yml` runs only after code reaches `main` (or by explicit manual dispatch), repeats `npm run check`, and then deploys in dependency order:
+
+1. Agent Control Worker;
+2. Gateway Worker;
+3. Web/PWA to Cloudflare Pages.
+
+The public workflow contains only portable deployment logic. Live deployment identity, account/resource identifiers and runtime configuration remain outside source control.
+
+### GitHub production environment
+
+Create a GitHub Actions Environment（环境） named `production`. Configure these deployment-only values there or at repository Actions scope without committing their values:
+
+- Secret `CLOUDFLARE_API_TOKEN` — a dedicated, least-privilege Cloudflare API token scoped to the account and only the Worker/Pages permissions required for this repository. Do not use a Global API Key.
+- Secret `CLOUDFLARE_ACCOUNT_ID` — kept outside the public repository even though it is not itself an authentication secret.
+- Secret `CLOUDFLARE_PAGES_PROJECT_NAME` — the existing Cloudflare Pages project used by the ALOHA Web deployment.
+- Variable `ALOHA_GATEWAY_URL` — the browser-visible production Gateway origin used to compile `VITE_GATEWAY_URL`. It contains no credential or delegated authority.
+
+The deployment workflow deliberately has no `pull_request` trigger, so fork/PR code cannot invoke production deployment with deployment credentials.
+
+### Cloudflare runtime secrets
+
+The n8n endpoint and bearer token belong to the Agent Control Worker, not GitHub source configuration. Configure them as Cloudflare Worker Secrets:
+
+- `N8N_AGENT_WEBHOOK_URL`
+- `N8N_AGENT_AUTH_TOKEN`
+
+`workers/agent-control/wrangler.jsonc` declares both names as required for the current M1 Header-Auth runtime bootstrap. Wrangler validates that the secrets already exist on the deployed Worker before a production deploy succeeds. Values are never placed in GitHub workflow YAML, Wrangler config, Actions logs or repository documentation.
+
+### Web deployment mode
+
+The Actions-managed Web deployment uses Cloudflare Pages **Direct Upload** through Wrangler. The Pages project must therefore be compatible with Direct Upload. Do not accidentally create a Git-integrated Pages project and then expect it to behave as a Direct Upload project; Cloudflare treats these as distinct project modes.
+
+The workflow builds the Web app with `VITE_GATEWAY_URL` derived from the external `ALOHA_GATEWAY_URL` GitHub variable, then uploads `apps/web/dist` to the configured Pages project. No trusted credential is embedded in browser code.
+
+### Deployment safety rule
+
+Production deployment follows this boundary:
+
+`public source + public deployment definition + private deployment identity + private runtime secrets`
+
+Do not add `pull_request_target`, checkout untrusted pull-request code in a privileged deployment job, echo deployment secrets, or move n8n runtime credentials into browser-visible build variables.
+
 ## Definition of done for scaffold-level changes
 
 A scaffold or architecture change is complete only when the relevant `AGENTS.md`, `README.md`, `docs/architecture.md`, shared contracts, workspace scripts and CI validation remain consistent.
