@@ -37,9 +37,17 @@ The Header stays visually quiet and does not compete with the Current Work Surfa
 - center: `ALOHA` by default; may later show a lightweight Context Title（上下文标题） when a task has a meaningful stable title;
 - right: **New Context（新上下文）**.
 
-`New Context` ends the current short-lived interaction context from the main surface and opens a clean current work surface. It does **not** delete History（历史） or Memory（记忆）.
+`New Context` opens a new Conversation / Context（新会话 / 新上下文） with a clean Current Work Surface. It does **not** delete History（历史） or Memory（记忆）.
 
-`Clear Surface（仅清理当前显示）`, `New Context（新上下文）`, and clearing History / Memory are different operations. For the MVP, only `New Context` is promoted to the Header primary action; a standalone Clear Surface action is not required as a first-class control.
+`Clear Surface（仅清理当前显示）`, `New Context（新上下文）`, Stop（停止当前 Run）, and clearing History / Memory are different operations. For the MVP, only `New Context` is promoted to the Header primary action; a standalone Clear Surface action is not required as a first-class control.
+
+#### New Context lifecycle
+
+- if the current conversation has a Working Run, `New Context` does **not** Stop it; the old Run continues in the background and its later output belongs to the old conversation / History;
+- if there is no unsent draft, `New Context` opens the new conversation immediately;
+- if unsent text or pending resources exist, the user must confirm discarding that draft before a new conversation is created;
+- cancelling that confirmation keeps the current conversation and draft unchanged;
+- navigating to History, Settings or other non-destructive screens does not discard the current draft.
 
 The final iconography remains a visual-design detail, but the action semantics are fixed.
 
@@ -66,7 +74,9 @@ After a Submission is accepted, the Surface uses a **process state -> progressiv
 - do not expose private chain-of-thought or internal reasoning traces;
 - the user may continue preparing a new Composer draft while the current run is Working;
 - the user may explicitly Stop the current run;
-- sending a new Submission while a run is Working is an interrupting action: the accepted new Submission supersedes the current run and starts the new instruction rather than queueing behind it.
+- sending a new Submission **inside the same current conversation** while a run is Working is an interrupting action: the accepted new Submission supersedes the current run and starts the new instruction rather than queueing behind it.
+
+This is intentionally different from `New Context`: a same-conversation Submission can interrupt the active Run, while `New Context` leaves the old conversation's Run running in the background.
 
 #### Interrupt ordering
 
@@ -106,11 +116,10 @@ History is intentionally allowed to use a conventional interaction model even th
 - top level: a conventional Conversation List（会话列表）;
 - opening a historical conversation shows its chronological Message Flow（消息流）, including user submissions, ALOHA outputs and relevant terminal markers such as Stopped / Superseded;
 - history is for recall, inspection and search; it does not turn the main Current Work Surface back into a message stream;
-- continuing from history never rewinds or mutates the original conversation;
-- if the user continues from a historical conversation / turn, ALOHA creates a **new Conversation / Context（新会话 / 新上下文）** and records an explicit reference to the selected historical source;
-- the historical conversation remains immutable as historical evidence; the new conversation may use that referenced content as context.
+- **the MVP does not support starting / branching a new conversation from a historical message or historical conversation**;
+- historical conversations are read-only interaction records from the product perspective.
 
-This provides familiar history browsing without introducing time rollback or in-place conversation branching semantics into the MVP.
+A future version may add explicit historical Reference（引用） semantics, but that is intentionally deferred rather than approximated with rollback or in-place branching.
 
 ## Composer cross-device model
 
@@ -148,6 +157,11 @@ The expanded state supports:
 - explicit Send;
 - resource-only, text-only and mixed submissions.
 
+Keyboard submission semantics:
+
+- Desktop: `Enter` sends when `canSend` is true; `Shift + Enter` inserts a newline;
+- Mobile / Tablet system-keyboard Enter inserts a newline; explicit Send remains the submission action.
+
 During Expanded dictation, the `+` resource entry is disabled. The user stops dictation before opening a resource picker.
 
 ### Mobile collapse policy
@@ -157,6 +171,18 @@ When the Mobile / Tablet system keyboard closes or Expanded Composer loses editi
 - no text and no pending resources -> collapse to Compact Capsule;
 - text draft exists -> remain Expanded;
 - no text but pending resources exist -> collapse to Compact while keeping Pending Submission Area and all resources.
+
+### Draft persistence
+
+An unsent Draft（草稿） should survive ordinary PWA lifecycle interruptions.
+
+- persist `textDraft` locally;
+- persist references/metadata for pending resources that have successfully reached Ready state;
+- refresh, normal navigation away/back, or OS/browser PWA process reclamation restores the recoverable draft;
+- transient Uploading resources must never be restored as falsely Ready; after recovery they require a valid Ready reference or explicit retry/reselection;
+- successful Submission clears the consumed draft;
+- explicit user deletion clears the deleted content/resource;
+- confirmed `New Context` with an unsent draft clears that draft as part of the confirmed discard action.
 
 ## Pending Submission Area（待提交区）
 
@@ -248,10 +274,11 @@ That file is the implementation/test specification. This file stays at the produ
 
 ## Product decisions still open
 
-The main PWA interaction and Composer behavior are now functionally specified. Remaining open items are primarily presentation/tuning details:
+The main PWA interaction, Composer behavior and conversation lifecycle are now functionally specified. Remaining open items are primarily presentation/tuning details:
 
 1. detailed visual iconography for New Context, Stop, Stopped and Superseded;
 2. detailed wording and visual treatment of process states and progressive-result transitions;
 3. resource preview UI details and exact MIME/extension allow-list within the already-fixed MVP resource families;
 4. visual layout, animation and real-device tuning for Header, Surface, Composer and voice gestures;
-5. later Annotation（标注） interaction details and Facet integration.
+5. later Annotation（标注） interaction details and Facet integration;
+6. future historical-reference / branch-from-history semantics, intentionally out of MVP.
