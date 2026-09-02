@@ -1,6 +1,6 @@
-# Composer state machine and test baseline
+# Composer state machine and interaction lifecycle test baseline
 
-> Status: **Feature Spec Complete（功能规格完整） for the Composer and run-interruption interaction contract**. This file defines intended behavior and the implementation-test baseline. It does not claim the behavior is already implemented or verified.
+> Status: **Feature Spec Complete（功能规格完整） for the Composer, run-interruption and MVP conversation-lifecycle interaction contract**. This file defines intended behavior and the implementation-test baseline. It does not claim the behavior is already implemented or verified.
 
 ## Model
 
@@ -26,7 +26,7 @@ Initial state:
 - Mobile / Tablet -> `Compact.Idle`
 - Desktop -> `Expanded.Ready`
 
-`Surface.Working / Result` is a separate interaction lifecycle. Composer remains usable while Surface is Working.
+`Surface.Working / Result` and Conversation / Context lifecycle are separate from the Composer state tree. Composer remains usable while Surface is Working.
 
 ## State context
 
@@ -57,6 +57,7 @@ Resource upload state is orthogonal to Composer state.
 ```text
 hasValidText       = trim(textDraft).length > 0
 hasResources       = pendingResources.length > 0
+hasDraft           = hasValidText or hasResources
 hasVoiceText       = trim(voiceTranscriptBuffer).length > 0
 allResourcesReady  = every pending resource has status=ready
 resourceCountValid = pendingResources.length <= 10
@@ -89,7 +90,7 @@ If any pending resource is Uploading, Send is disabled. Failed, unsupported or o
 14. **Duplicate submit prevention**: one user send/release action creates at most one logical Submission.
 15. **Failure is lossless**: if a Submission is not accepted, text and resources are recoverable together.
 16. **Working does not lock Composer**: a next-turn draft may be prepared while Surface is Working.
-17. **Accepted next-turn Submission interrupts current Working run**: it supersedes the current run rather than queueing behind it.
+17. **Accepted next-turn Submission interrupts current Working run**: inside the same conversation it supersedes the current run rather than queueing behind it.
 18. **New-request acceptance precedes old-run cancellation**: a failed replacement request must not kill the old run.
 19. **Superseded late output never wins the active surface**: late output from an old run may enter History / Trace but cannot overwrite the new Current Work Surface.
 20. **Stop is best-effort, not rollback**: committed external side effects are not silently undone.
@@ -98,6 +99,12 @@ If any pending resource is Uploading, Send is disabled. Failed, unsupported or o
 23. **Original image identity is preserved**: thumbnails/optimized derivatives may be generated separately; transport must not silently replace the original resource with a destructive compressed substitute.
 24. **Gesture semantics are stable, thresholds are tunable**: initial long-press and swipe thresholds may be tuned without changing the state-machine meaning.
 25. **Voice entry/edit transition provides Haptic feedback where supported**.
+26. **New Context is not Stop**: leaving a Working conversation for a new context does not cancel its active Run; that Run may finish in the background and write to the old conversation/history.
+27. **Dirty-draft New Context requires confirmation**: unsent text or resources are never silently discarded by New Context.
+28. **Non-destructive navigation preserves Draft**: History, Settings and ordinary navigation do not clear unsent text/resources.
+29. **Draft survives ordinary PWA lifecycle loss**: recoverable text and Ready-resource references are restored after refresh/process reclamation.
+30. **Keyboard semantics are platform-specific only at submission gesture level**: Desktop `Enter` sends and `Shift+Enter` inserts newline; Mobile/Tablet keyboard Enter inserts newline and explicit Send submits.
+31. **History is recall-only in MVP**: conventional conversation-list/message-flow viewing is supported, but starting/branching a conversation from history is not.
 
 ## Events and transitions
 
@@ -147,6 +154,10 @@ Initial swipe-up edit threshold: approximately **60 px** vertical displacement. 
 | `TAP_MIC` | permission=denied | remain | show permission guidance; preserve text/resources |
 | `TAP_SEND` | `canSend` | `Submitting` | create immutable snapshot |
 | `TAP_SEND` | not `canSend` | remain | no request |
+| `KEY_ENTER` | Desktop and `canSend` | `Submitting` | create immutable snapshot; same semantics as Send |
+| `KEY_ENTER` | Desktop and not `canSend` | remain | no request |
+| `KEY_SHIFT_ENTER` | Desktop | remain | insert newline |
+| `KEY_ENTER` | Mobile/Tablet | remain | insert newline; do not submit |
 | `EDITOR_BLUR` | Mobile/Tablet and no text and no resources | `Compact.Idle` | close keyboard |
 | `EDITOR_BLUR` | Mobile/Tablet and text exists | remain | preserve Expanded draft |
 | `EDITOR_BLUR` | Mobile/Tablet and no text and resources exist | `Compact.Idle` | close keyboard; keep resources/pending area |
@@ -168,10 +179,10 @@ After first-time microphone permission is granted, the user explicitly taps Mic 
 
 | Event | Guard | Target | Actions |
 | --- | --- | --- | --- |
-| `SUBMISSION_ACCEPTED` | Mobile/Tablet | `Compact.Idle` | clear consumed draft/resources; hand snapshot to Surface.Working; Composer becomes available for next draft |
-| `SUBMISSION_ACCEPTED` | Desktop | `Expanded.Ready` | clear consumed draft/resources; hand snapshot to Surface.Working; Composer becomes available for next draft |
-| `SUBMISSION_REJECTED` | originated from Expanded | `Expanded.Ready` | restore full snapshot; show failure/retry |
-| `SUBMISSION_REJECTED` | originated from Compact voice | `Expanded.Ready` | recover voice text + resources into editable form; show failure/retry |
+| `SUBMISSION_ACCEPTED` | Mobile/Tablet | `Compact.Idle` | clear consumed draft/resources and persisted draft; hand snapshot to Surface.Working; Composer becomes available for next draft |
+| `SUBMISSION_ACCEPTED` | Desktop | `Expanded.Ready` | clear consumed draft/resources and persisted draft; hand snapshot to Surface.Working; Composer becomes available for next draft |
+| `SUBMISSION_REJECTED` | originated from Expanded | `Expanded.Ready` | restore full snapshot and persistence; show failure/retry |
+| `SUBMISSION_REJECTED` | originated from Compact voice | `Expanded.Ready` | recover voice text + resources into editable persisted form; show failure/retry |
 
 Repeated Send/release while `Submitting` must not create another logical Submission.
 
@@ -195,13 +206,24 @@ Composer is available for the next draft while Surface.Working.
 
 - the user may type, dictate, attach resources and prepare the next draft while the current run is Working;
 - explicit Stop is available on the Working interaction;
-- a new Submission sent during Working is an interrupting candidate, not a queued follow-up;
+- a new Submission sent **inside the same conversation** during Working is an interrupting candidate, not a queued follow-up;
 - the old run continues while the new Submission is being admitted;
 - **only after the new Submission is accepted** is the old run marked Superseded and best-effort cancellation requested;
 - if the new Submission is rejected/not accepted, the old run continues normally;
 - after supersession, late output from the old run may be stored in History / Trace but must never overwrite the active Current Work Surface for the new run;
 - interruption/Stop cancels work that is still cancellable, but does not imply rollback of external side effects already committed;
 - Current Work Surface shows meaningful process state and progressively renders usable output as it becomes available; private chain-of-thought is never exposed.
+
+### New Context coordination
+
+`New Context` is a conversation-lifecycle action, not a Run-control action.
+
+- when invoked while the current conversation has a Working Run, the old Run keeps running in the background;
+- its later progress/result belongs to the old conversation and may be viewed from History;
+- the newly created conversation owns the active Current Work Surface;
+- New Context does not mark the old Run Stopped or Superseded merely because the user navigated away;
+- if an unsent Draft exists, require explicit discard confirmation before switching;
+- if confirmation is cancelled, remain in the old conversation with its Draft unchanged.
 
 ### Stopped / superseded presentation contract
 
@@ -210,6 +232,19 @@ Composer is available for the next draft while Surface.Working.
 - replacement by an accepted new instruction adds a **Superseded（已被新指令中断）** terminal marker to the old run;
 - after the terminal marker, that run may not append further content to the active Current Work Surface;
 - committed external effects remain visible facts even if the run was later stopped/interrupted.
+
+## Draft persistence contract
+
+Draft persistence is local-client recovery, not Conversation history.
+
+- persist current `textDraft` locally;
+- persist references/metadata for pending resources already confirmed Ready;
+- refresh, ordinary route navigation and PWA process reclamation restore the recoverable Draft;
+- a resource that was only Uploading at lifecycle interruption must never be restored as Ready without a valid completed resource reference;
+- navigation to History / Settings does not clear Draft;
+- successful Submission clears the consumed persisted Draft;
+- user deletion clears the corresponding persisted content/resource;
+- confirmed discard during New Context clears the old Draft before creating the new active conversation.
 
 ## MVP resource policy
 
@@ -232,6 +267,16 @@ Limits:
 
 The exact MIME / extension allow-list within these families is an implementation detail that must be explicit in code/config and tests once the upload stack is selected.
 
+## History contract
+
+History uses conventional UI semantics:
+
+- `More -> History` opens a Conversation List（会话列表）;
+- opening one conversation shows chronological Message Flow（消息流）;
+- Stopped / Superseded terminal markers are visible where relevant;
+- History is recall/inspection/search only in MVP;
+- no action starts, branches or resumes a new conversation from a historical conversation/message in the MVP.
+
 ## Formal test cases
 
 `Scope = Common` means Desktop + Mobile + Tablet expanded behavior. `Mobile/Tablet only` covers Compact entry behavior.
@@ -249,6 +294,14 @@ The exact MIME / extension allow-list within these families is an implementation
 | CMP-007 | Mobile/Tablet only | Expanded; no text/resources | close keyboard / blur | collapse to Compact |
 | CMP-008 | Mobile/Tablet only | Expanded; text exists | close keyboard / blur | remain Expanded; draft preserved |
 | CMP-009 | Mobile/Tablet only | Expanded; resource-only | close keyboard / blur | collapse to Compact; resources remain visible/pending |
+
+### KBD — Keyboard submission
+
+| ID | Scope | Scenario | Action | Expected |
+| --- | --- | --- | --- | --- |
+| KBD-001 | Desktop only | Expanded.Ready and `canSend` | press Enter | same as Send: one Submission starts |
+| KBD-002 | Desktop only | Expanded.Ready | press Shift + Enter | newline inserted; no Submission |
+| KBD-003 | Mobile/Tablet only | Expanded.Ready | keyboard Enter | newline inserted; no Submission; explicit Send remains required |
 
 ### RES — Pending resources
 
@@ -317,7 +370,7 @@ The exact MIME / extension allow-list within these families is an implementation
 | SUB-003 | Common | text + ready mixed resources | Send | one mixed Submission |
 | SUB-004 | Common | empty/whitespace; no resources | attempt Send | disabled; no request |
 | SUB-005 | Common | sendable | rapidly click Send | at most one logical Submission |
-| SUB-006 | Common | accepted | transition | snapshot frozen; consumed draft/resources cleared; Surface.Working; Composer available for next draft |
+| SUB-006 | Common | accepted | transition | snapshot frozen; consumed draft/resources/persistence cleared; Surface.Working; Composer available for next draft |
 | SUB-007 | Common | normal Send rejected/not accepted | failure | full text/resource snapshot restored together |
 | SUB-008 | Mobile/Tablet only | Compact release-send rejected/not accepted | failure | voice text/resources recover into editable state |
 
@@ -349,6 +402,33 @@ The exact MIME / extension allow-list within these families is an implementation
 | WRK-011 | Common | Surface Working | execution produces status/result chunks | Surface moves from meaningful process state to progressively rendered usable result |
 | WRK-012 | Common | run terminally Stopped/Superseded | later stream event arrives | event cannot append to that run's active Current Work Surface presentation |
 
+### CTX — New Context lifecycle
+
+| ID | Scope | Scenario | Action | Expected |
+| --- | --- | --- | --- | --- |
+| CTX-001 | Common | current conversation Working; no unsent draft | New Context | new conversation opens; old Run continues in background; no Stop/Superseded caused by navigation |
+| CTX-002 | Common | no Working run; no unsent draft | New Context | new clean conversation opens immediately |
+| CTX-003 | Common | unsent text and/or resources exist | New Context | discard confirmation shown; no silent loss |
+| CTX-004 | Common | discard confirmation shown | cancel | remain current conversation; Draft unchanged |
+| CTX-005 | Common | discard confirmation shown | confirm discard | old Draft cleared; new clean conversation becomes active; any old Working Run continues independently |
+
+### DRF — Draft persistence
+
+| ID | Scope | Scenario | Action | Expected |
+| --- | --- | --- | --- | --- |
+| DRF-001 | Common | unsent text draft exists | refresh / PWA process reclaimed then reopen | text draft restored |
+| DRF-002 | Common | Ready resources pending | refresh / reopen | completed resource references/metadata restored in Pending Submission Area |
+| DRF-003 | Common | resource was only Uploading at lifecycle loss | reopen | resource is not falsely restored as Ready; retry/reselection or valid completed reference required |
+| DRF-004 | Common | unsent Draft exists | navigate to History/Settings and return | Draft remains intact |
+| DRF-005 | Common | Submission accepted | return/reopen | consumed Draft does not reappear |
+
+### HIS — History
+
+| ID | Scope | Scenario | Action | Expected |
+| --- | --- | --- | --- | --- |
+| HIS-001 | Common | history exists | open `More -> History`, select conversation | conventional conversation list then chronological message flow is shown |
+| HIS-002 | Common | historical conversation/message open | inspect available actions | MVP offers no start/branch/resume-new-conversation-from-history action |
+
 ### RST — Result completion
 
 | ID | Scope | Scenario | Action | Expected |
@@ -356,21 +436,22 @@ The exact MIME / extension allow-list within these families is an implementation
 | RST-001 | Mobile/Tablet only | result complete; no next draft | settle | Composer available from Compact; submitted draft/resources do not reappear |
 | RST-002 | Desktop only | result complete; no next draft | settle | Composer available empty Expanded.Ready; submitted draft/resources do not reappear |
 
-Total formal baseline: **82 test cases**.
+Total formal baseline: **97 test cases**.
 
 ## Remaining product decisions
 
-The functional Composer and interruption semantics are no longer blocked. Remaining items are presentation/detail decisions rather than state-machine gaps:
+The functional MVP interaction contract is no longer blocked by product semantics. Remaining items are presentation/detail or explicitly deferred capabilities:
 
-1. detailed Header iconography and exact current-surface reset / new-context semantics;
-2. final Result Input Source default presentation;
-3. history / prior-work-surface recall entry point;
-4. detailed visual wording/layout for process states and Stopped / Superseded markers;
-5. exact MIME / extension allow-list inside the approved MVP resource families;
-6. final tuning of gesture thresholds / Haptic intensity / animation after real-device testing.
+1. detailed visual iconography for New Context, Stop, Stopped and Superseded;
+2. detailed visual wording/layout for process states and progressive-result transitions;
+3. exact MIME / extension allow-list inside the approved MVP resource families and resource-preview presentation;
+4. final tuning of gesture thresholds / Haptic intensity / animation after real-device testing;
+5. Annotation（标注） interaction details / Facet integration;
+6. historical Reference / branch-from-history semantics, intentionally deferred beyond MVP.
 
 ### Development readiness
 
 - **Composer state machine**: Feature Spec Complete（功能规格完整）.
-- **Run interruption contract**: Feature Spec Complete（功能规格完整） at the product/interaction level; Gateway / Agent Runtime implementation must preserve the acceptance-before-cancel ordering and run identity.
+- **Run interruption contract**: Feature Spec Complete（功能规格完整） at the product/interaction level; Gateway / Agent Runtime implementation must preserve acceptance-before-cancel ordering and run identity.
+- **Conversation lifecycle / Draft recovery / History MVP contract**: Feature Spec Complete（功能规格完整） at the product/interaction level.
 - **Interaction Frozen（交互冻结）**: only after remaining presentation/detail items and hands-on device tuning are finalized.
