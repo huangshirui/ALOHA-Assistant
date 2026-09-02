@@ -41,6 +41,10 @@ input {
   font: inherit;
 }
 
+button {
+  color: inherit;
+}
+
 .shell {
   min-height: 100dvh;
   display: grid;
@@ -66,13 +70,65 @@ input {
   border: 0;
   background: var(--color-surface-transparent);
   min-height: var(--size-control-sm);
+  cursor: pointer;
 }
 
 .stage {
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
   padding: var(--space-6);
+}
+
+.work-surface {
+  width: 100%;
+  display: grid;
+  gap: var(--space-6);
+}
+
+.status,
+.surface-label,
+.placeholder-text,
+.error-text,
+.source-text,
+.output-text {
+  margin: 0;
+}
+
+.status,
+.surface-label,
+.placeholder-text,
+.source-text {
   color: var(--color-text-muted);
+}
+
+.status,
+.surface-label {
+  font-size: 0.875rem;
+}
+
+.surface-label {
+  margin-bottom: var(--space-2);
+}
+
+.surface-section {
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: var(--space-4);
+}
+
+.source-text,
+.output-text,
+.error-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.output-text {
+  color: var(--color-text-primary);
+}
+
+.error-text {
+  margin-top: var(--space-2);
 }
 
 .composer {
@@ -85,12 +141,28 @@ input {
   min-height: var(--size-control-md);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-pill);
+  background: var(--color-bg-canvas);
+  color: var(--color-text-primary);
   padding: 0 var(--space-4);
 }
 
 .composer button {
   min-height: var(--size-control-md);
-  border: 0;
+  border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-pill);
+  background: var(--color-surface-transparent);
   padding: 0 var(--space-4);
+  cursor: pointer;
+}
+
+.composer button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+@media (max-width: 40rem) {
+  .stage {
+    align-items: flex-start;
+    padding-top: var(--space-4);
+  }
 }
