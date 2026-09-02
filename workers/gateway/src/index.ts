@@ -1,9 +1,9 @@
-interface AgentBinding {
+interface AgentControlBinding {
   fetch(request: Request): Promise<Response>
 }
 
 interface Env {
-  AGENT?: AgentBinding
+  AGENT_CONTROL?: AgentControlBinding
 }
 
 const json = (value: unknown, status = 200) =>
@@ -18,11 +18,11 @@ export default {
     }
 
     if (url.pathname === '/v1/interactions' && request.method === 'POST') {
-      if (!env.AGENT) {
-        return json({ error: 'agent_binding_not_configured' }, 503)
+      if (!env.AGENT_CONTROL) {
+        return json({ error: 'agent_control_binding_not_configured' }, 503)
       }
 
-      return env.AGENT.fetch(request)
+      return env.AGENT_CONTROL.fetch(request)
     }
 
     return json({ error: 'not_found' }, 404)
