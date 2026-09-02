@@ -17,8 +17,12 @@
     "dev:gateway": "npm run dev -w @aloha/gateway",
     "dev:agent-control": "npm run dev -w @aloha/agent-control",
     "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "build:web": "npm run build -w @aloha/web",
-    "check": "npm run typecheck && npm run build"
+    "check": "npm run typecheck && npm run test && npm run build"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.11"
   }
 }
