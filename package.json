@@ -2,6 +2,7 @@
   "name": "aloha-assistant",
   "private": true,
   "version": "0.1.0",
+  "license": "AGPL-3.0-or-later",
   "packageManager": "npm@10.9.2",
   "workspaces": [
     "apps/*",
