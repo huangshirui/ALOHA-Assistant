@@ -2,6 +2,26 @@
   box-sizing: border-box;
 }
 
+:root {
+  --font-family-sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --color-bg-canvas: #fff;
+  --color-text-primary: #111;
+  --color-text-muted: #666;
+  --color-border-subtle: #ddd;
+  --color-surface-transparent: transparent;
+
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+
+  --size-control-sm: 2.5rem;
+  --size-control-md: 3rem;
+  --radius-pill: 999px;
+  --layout-content-max: 56rem;
+}
+
 html,
 body,
 #app {
@@ -11,9 +31,9 @@ body,
 }
 
 body {
-  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  background: #fff;
-  color: #111;
+  font-family: var(--font-family-sans);
+  background: var(--color-bg-canvas);
+  color: var(--color-text-primary);
 }
 
 button,
@@ -25,7 +45,7 @@ input {
   min-height: 100dvh;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  max-width: 56rem;
+  max-width: var(--layout-content-max);
   margin: 0 auto;
 }
 
@@ -33,44 +53,44 @@ input {
 .composer {
   display: grid;
   align-items: center;
-  gap: 0.75rem;
-  padding: max(0.75rem, env(safe-area-inset-top)) 1rem 0.75rem;
+  gap: var(--space-3);
+  padding: max(var(--space-3), env(safe-area-inset-top)) var(--space-4) var(--space-3);
 }
 
 .header {
-  grid-template-columns: 2.5rem 1fr 2.5rem;
+  grid-template-columns: var(--size-control-sm) 1fr var(--size-control-sm);
   text-align: center;
 }
 
 .icon-button {
   border: 0;
-  background: transparent;
-  min-height: 2.5rem;
+  background: var(--color-surface-transparent);
+  min-height: var(--size-control-sm);
 }
 
 .stage {
   display: grid;
   place-items: center;
-  padding: 1.5rem;
-  color: #666;
+  padding: var(--space-6);
+  color: var(--color-text-muted);
 }
 
 .composer {
   grid-template-columns: 1fr auto;
-  padding: 0.75rem 1rem max(0.75rem, env(safe-area-inset-bottom));
+  padding: var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
 }
 
 .composer input {
   width: 100%;
-  min-height: 3rem;
-  border: 1px solid #ddd;
-  border-radius: 1.5rem;
-  padding: 0 1rem;
+  min-height: var(--size-control-md);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-4);
 }
 
 .composer button {
-  min-height: 3rem;
+  min-height: var(--size-control-md);
   border: 0;
-  border-radius: 1.5rem;
-  padding: 0 1rem;
+  border-radius: var(--radius-pill);
+  padding: 0 var(--space-4);
 }
