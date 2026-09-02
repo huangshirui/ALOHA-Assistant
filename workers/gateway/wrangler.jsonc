@@ -3,5 +3,5 @@
   "name": "aloha-gateway",
   "main": "src/index.ts",
   "compatibility_date": "2026-09-01"
-  // Add a Service Binding named AGENT when the Agent Worker is ready to wire.
+  // Add a Service Binding named AGENT_CONTROL when the Agent Control service is ready to wire.
 }
