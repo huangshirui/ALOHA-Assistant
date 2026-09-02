@@ -35,9 +35,13 @@ The Header stays visually quiet and does not compete with the Current Work Surfa
 
 - left: More / navigation entry;
 - center: `ALOHA` by default; may later show a lightweight Context Title（上下文标题） when a task has a meaningful stable title;
-- right: a current-surface reset/new-surface action. Its final icon and exact semantics still require product validation.
+- right: **New Context（新上下文）**.
 
-`Clear Surface（清理当前工作面）`, `New Context（新短期上下文）`, and clearing history/memory are different operations and must not be collapsed into one destructive action.
+`New Context` ends the current short-lived interaction context from the main surface and opens a clean current work surface. It does **not** delete History（历史） or Memory（记忆）.
+
+`Clear Surface（仅清理当前显示）`, `New Context（新上下文）`, and clearing History / Memory are different operations. For the MVP, only `New Context` is promoted to the Header primary action; a standalone Clear Surface action is not required as a first-class control.
+
+The final iconography remains a visual-design detail, but the action semantics are fixed.
 
 ### Current Work Surface（当前工作面）
 
@@ -88,9 +92,25 @@ Stop/interruption is best-effort for work that can still be cancelled. An operat
 
 ### Result-state input source
 
-After ALOHA completes a result, the surface should prioritize the result rather than leaving the full user input permanently expanded.
+After ALOHA completes a result, the surface prioritizes the result rather than leaving the full user input permanently expanded.
 
-The product may expose a **Result Input Source（结果态输入来源）** presentation setting. This setting changes presentation only; the original input remains in Context / Trace / History.
+**Result Input Source（结果态输入来源） defaults to ON.** The default presentation is a lightweight collapsed source summary, for example the submitted text excerpt and/or resource count. The user may expand it when source context is useful.
+
+A Settings toggle may disable this presentation entirely. This changes presentation only; the original input remains in Context / Trace / History and is not forgotten or deleted.
+
+## History（历史）
+
+History is intentionally allowed to use a conventional interaction model even though the main screen is State-first.
+
+- entry: `More -> History`;
+- top level: a conventional Conversation List（会话列表）;
+- opening a historical conversation shows its chronological Message Flow（消息流）, including user submissions, ALOHA outputs and relevant terminal markers such as Stopped / Superseded;
+- history is for recall, inspection and search; it does not turn the main Current Work Surface back into a message stream;
+- continuing from history never rewinds or mutates the original conversation;
+- if the user continues from a historical conversation / turn, ALOHA creates a **new Conversation / Context（新会话 / 新上下文）** and records an explicit reference to the selected historical source;
+- the historical conversation remains immutable as historical evidence; the new conversation may use that referenced content as context.
+
+This provides familiar history browsing without introducing time rollback or in-place conversation branching semantics into the MVP.
 
 ## Composer cross-device model
 
@@ -228,10 +248,10 @@ That file is the implementation/test specification. This file stays at the produ
 
 ## Product decisions still open
 
-These items are intentionally not treated as implementation facts yet:
+The main PWA interaction and Composer behavior are now functionally specified. Remaining open items are primarily presentation/tuning details:
 
-1. detailed Header iconography and the exact current-surface reset / new-context action semantics;
-2. final Result Input Source default presentation;
-3. history / prior-work-surface recall entry point;
-4. detailed visual treatment and wording of process states, Stop / Stopped / Superseded markers and progressive-result transitions;
-5. resource preview UI details and exact MIME/extension allow-list within the MVP resource families.
+1. detailed visual iconography for New Context, Stop, Stopped and Superseded;
+2. detailed wording and visual treatment of process states and progressive-result transitions;
+3. resource preview UI details and exact MIME/extension allow-list within the already-fixed MVP resource families;
+4. visual layout, animation and real-device tuning for Header, Surface, Composer and voice gestures;
+5. later Annotation（标注） interaction details and Facet integration.
