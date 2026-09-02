@@ -72,6 +72,8 @@ The Gateway and Agent Control may initially be deployed on the same platform, bu
 
 ALOHA owns its first-party Interaction Protocol. It must support progressive/streaming interaction and may evolve beyond currently available chat protocols for richer state, approvals, artifacts, annotations and generative UI.
 
+The first implemented text slice uses `POST /v1/interactions` and ALOHA canonical Server-Sent Events（SSE，服务器发送事件）: `run.started`, `output.delta`, `run.completed`, and `run.failed`. See `docs/interaction-protocol.md`.
+
 ### ALOHA -> Runtime
 
 ALOHA uses a replaceable Runtime Contract. For the MVP, an **n8n Runtime Adapter** translates ALOHA Run / Context / Capability semantics into the selected n8n Agent workflow contract and normalizes n8n execution output back into ALOHA canonical events. n8n-native workflow/session payloads must not become the ALOHA client protocol.
@@ -97,7 +99,7 @@ The MVP should include:
 - at least one authorized LifeSpace / HomeMew read-write scenario;
 - clear authorization boundaries between the personal ALOHA Assistant and the separate HomeMew Agent.
 
-The MVP Runtime selection is now **frozen to n8n Agent for the first vertical slice**. Runtime replaceability remains an architecture invariant, but evaluating or integrating a second backend is explicitly outside the first MVP slice.
+The MVP Runtime selection is **frozen to n8n Agent for the first vertical slice**. Runtime replaceability remains an architecture invariant, but evaluating or integrating a second backend is explicitly outside the first MVP slice.
 
 ## Read before changing the repository
 
@@ -107,10 +109,11 @@ Current sources of truth:
 
 - `README.md` — product boundary and MVP target
 - `docs/architecture.md` — current architecture and repository boundaries
+- `docs/interaction-protocol.md` — first-party Interaction Protocol slice implemented by Web / Gateway / Agent Control
 - `docs/pwa-interaction.md` — current PWA interaction/product baseline
 - `docs/composer-state-machine.md` — Composer states, guards, invariants and implementation/test baseline
 - `docs/conversation-run-lifecycle.md` — Conversation / Run lifecycle and background execution management
-- `docs/development.md` — toolchain, validation and lockfile baseline
+- `docs/development.md` — toolchain, runtime configuration, validation and lockfile baseline
 - `packages/contracts` — shared ALOHA interaction/capability/runtime-facing protocol types
 
 ## Repository layout
@@ -124,15 +127,17 @@ workers/
 packages/
   contracts/            # interaction / context / run / runtime-facing contracts
   capabilities/         # ALOHA capability registry and adapters
+  runtime-n8n/          # concrete MVP adapter for the n8n Agent backend
 docs/
   architecture.md
+  interaction-protocol.md
   pwa-interaction.md
   composer-state-machine.md
   conversation-run-lifecycle.md
   development.md
 ```
 
-The first concrete Runtime Adapter should now be implemented explicitly for **n8n Agent**. Do not build a generic Agent framework around it; create only the smallest adapter/contracts needed for the first real vertical slice, while keeping n8n-specific payloads out of Gateway, first-party client contracts and generic Agent Control semantics.
+The first concrete Runtime Adapter is implemented explicitly for **n8n Agent** in `packages/runtime-n8n`. Keep n8n-specific payloads out of Gateway, first-party client contracts and generic Agent Control semantics, and do not build a generic Agent framework around it.
 
 ## Getting started
 
@@ -148,7 +153,7 @@ npm run dev:gateway
 npm run dev:agent-control
 ```
 
-Validate the complete repository scaffold with:
+Validate the repository with:
 
 ```bash
 npm run check
@@ -168,4 +173,4 @@ npm run check
 
 ## Status
 
-Repository skeleton initialized. Product and architecture baselines are evolving with the MVP. **n8n Agent is selected as the Primary Runtime Backend for the MVP first vertical slice; the integration itself is planned, not yet claimed as implemented or verified.**
+The repository skeleton and the **first text interaction slice are implemented in source**: PWA -> Gateway -> Agent Control -> n8n Runtime Adapter, with ALOHA canonical SSE events returned to the PWA. Automated checks cover the adapter and Agent Control normalization path. A real deployed n8n Agent execution is **not yet claimed as verified** until deployment-only runtime configuration is supplied and the integration check passes. Capability execution, trusted Identity / Authorization Context, confirmation, durable Conversation / Run lifecycle, voice and resources remain later slices.

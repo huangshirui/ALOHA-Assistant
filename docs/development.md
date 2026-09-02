@@ -22,6 +22,8 @@ npm run dev:gateway
 npm run dev:agent-control
 ```
 
+The Web app calls the Gateway only. During local Vite development, `/v1` is proxied to `http://127.0.0.1:8787`. A separately deployed Web app may set `VITE_GATEWAY_URL` to the public Gateway origin; this browser-visible value is routing configuration, not a trusted credential.
+
 The Gateway uses an `AGENT_CONTROL` Service Binding（服务绑定） to reach the Agent Control worker.
 
 Agent Control selects the n8n Agent Runtime Adapter when `N8N_AGENT_WEBHOOK_URL` is configured. An optional `N8N_AGENT_AUTH_TOKEN` is sent by the adapter as a bearer credential. Both values are deployment configuration and must never be committed with live values.
@@ -53,7 +55,7 @@ npm run check
 4. Gateway Wrangler dry-run build;
 5. Agent Control Wrangler dry-run build.
 
-The first runtime slice includes contract/adapter tests and Agent Control success/failure normalization tests. A real deployed n8n execution is still a separate integration verification step because live runtime configuration is intentionally outside the repository.
+The first runtime slice includes adapter tests and Agent Control success/failure normalization tests. A real deployed n8n execution is still a separate integration verification step because live runtime configuration is intentionally outside the repository.
 
 ## Runtime development rule
 
@@ -86,6 +88,7 @@ At the first local dependency install:
 - Add `.env.example` / `.dev.vars.example` only with synthetic placeholders when local setup needs one.
 - Keep staging and production Worker bindings/resources separate.
 - Browser code must never receive trusted service/application credentials.
+- `VITE_GATEWAY_URL` may be browser-visible because it is only the Gateway route; it must never carry credentials or delegated authority.
 - Runtime Backend credentials and endpoints must be injected as deployment configuration and must not leak into public examples or documentation.
 - `N8N_AGENT_WEBHOOK_URL` is deployment-only runtime configuration even if the endpoint itself is not a credential.
 - `N8N_AGENT_AUTH_TOKEN` is a secret and must use the deployment platform's secret mechanism.
