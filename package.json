@@ -15,7 +15,7 @@
   "scripts": {
     "dev:web": "npm run dev -w @aloha/web",
     "dev:gateway": "npm run dev -w @aloha/gateway",
-    "dev:agent": "npm run dev -w @aloha/agent",
+    "dev:agent-control": "npm run dev -w @aloha/agent-control",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
     "build:web": "npm run build -w @aloha/web",

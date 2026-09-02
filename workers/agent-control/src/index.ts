@@ -1,4 +1,4 @@
-import type { InteractionInput, InteractionOutput } from '@aloha/contracts'
+import type { InteractionInput } from '@aloha/contracts'
 import { CapabilityRegistry } from '@aloha/capabilities'
 
 const registry = new CapabilityRegistry()
@@ -11,18 +11,24 @@ export default {
     const url = new URL(request.url)
 
     if (url.pathname === '/health') {
-      return json({ service: 'aloha-agent', ok: true, capabilities: registry.list() })
+      return json({
+        service: 'aloha-agent-control',
+        ok: true,
+        capabilities: registry.list(),
+        runtimeBackend: null,
+      })
     }
 
     if (url.pathname === '/v1/interactions' && request.method === 'POST') {
       const input = (await request.json()) as InteractionInput
-      const output: InteractionOutput = {
-        requestId: input.requestId ?? crypto.randomUUID(),
-        kind: 'message',
-        text: 'ALOHA Agent Runtime is ready.',
-      }
 
-      return json(output)
+      return json(
+        {
+          error: 'runtime_backend_not_configured',
+          requestId: input.requestId ?? crypto.randomUUID(),
+        },
+        503,
+      )
     }
 
     return json({ error: 'not_found' }, 404)
