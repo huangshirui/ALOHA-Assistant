@@ -64,6 +64,26 @@ After a Submission is accepted, the Surface uses a **process state -> progressiv
 - the user may explicitly Stop the current run;
 - sending a new Submission while a run is Working is an interrupting action: the accepted new Submission supersedes the current run and starts the new instruction rather than queueing behind it.
 
+#### Interrupt ordering
+
+A new interrupting Submission does **not** cancel the current run optimistically.
+
+1. the existing run continues while the new Submission is being admitted;
+2. only after the new Submission is accepted does the runtime mark the old run as superseded and request best-effort cancellation;
+3. if the new Submission is rejected / not accepted, the old run continues normally;
+4. after supersession, any late result from the old run must never overwrite the new Current Work Surface. It may be retained in History / Trace（历史 / 轨迹） with a superseded marker.
+
+This avoids losing both runs when the new request fails.
+
+#### Stop / superseded presentation
+
+Already-rendered progressive output remains visible after a run is stopped or superseded; it is not erased as if the work never happened.
+
+- explicit user Stop -> mark the run/output as **Stopped（已停止）**;
+- accepted new instruction supersedes old run -> mark old run/output as **Superseded（已被新指令中断）**;
+- no further stream updates from that run may update the active Current Work Surface after the terminal marker;
+- external side effects already committed remain facts and are never presented as automatically rolled back.
+
 Stop/interruption is best-effort for work that can still be cancelled. An operation already committed to an external system cannot be treated as automatically rolled back.
 
 ### Result-state input source
@@ -133,6 +153,19 @@ Rules:
 7. text draft and pending resources are combined only when creating one Submission（提交） snapshot;
 8. if any selected resource is still Uploading, Send is disabled; Send becomes eligible only after all resources required by the Submission are Ready.
 
+### MVP resource boundary
+
+The first MVP intentionally keeps resource handling narrow:
+
+- images: common web/mobile image formats;
+- files: PDF, plain-text and Markdown documents;
+- Office documents and broader file families are deferred;
+- maximum resources per Submission: **10**;
+- maximum size per resource: **20 MB**;
+- image upload must not destructively replace the user's original with an aggressively compressed version merely for transport convenience;
+- the UI may generate a separate lightweight thumbnail/preview derivative for Pending Submission Area;
+- later processing pipelines may derive optimized representations without changing the original resource identity.
+
 ## Voice input modes
 
 ALOHA intentionally has two voice interaction paths.
@@ -148,6 +181,17 @@ The user keeps a finger pressed on the capsule, so transcription must not be hid
 - swipe upward without recognized text: return to the capsule without opening an empty editor;
 - existing pending resources remain independent and are included only if an actual submission occurs;
 - no independent Cancel gesture is required for MVP: swipe-up enters editable text and the user may delete it there.
+
+#### Initial gesture parameters
+
+Gesture thresholds are tunable UX parameters rather than protocol constants. The MVP starts with:
+
+- long-press activation: approximately **400 ms**;
+- swipe-up edit threshold: approximately **60 px** vertical displacement;
+- one light Haptic（触觉反馈） when voice capture successfully activates;
+- one light Haptic when the swipe-up edit transition is successfully committed.
+
+These values may be tuned after real-device testing without changing the semantic state machine.
 
 ### Expanded dictation（all devices）
 
@@ -186,10 +230,8 @@ That file is the implementation/test specification. This file stays at the produ
 
 These items are intentionally not treated as implementation facts yet:
 
-1. interruption acceptance ordering: when a new Submission is sent during Working, whether the previous run is cancelled only after the new Submission is accepted, so a failed new request does not kill the old run;
-2. exact Surface presentation after explicit Stop / interruption, including treatment of partial progressive output;
-3. MVP resource support and limits: resource types, file-size limit, resource-count limit and image handling/compression policy;
-4. final gesture thresholds, haptic feedback and animation details;
-5. detailed Header iconography and current-surface reset semantics;
-6. final Result Input Source default presentation;
-7. history / prior-work-surface recall entry point.
+1. detailed Header iconography and the exact current-surface reset / new-context action semantics;
+2. final Result Input Source default presentation;
+3. history / prior-work-surface recall entry point;
+4. detailed visual treatment and wording of process states, Stop / Stopped / Superseded markers and progressive-result transitions;
+5. resource preview UI details and exact MIME/extension allow-list within the MVP resource families.
