@@ -4,7 +4,7 @@ ALOHA Assistant is a personal AI assistant and the primary personal interaction 
 
 This repository owns the **ALOHA product**: first-party client experience, channel Gateway（网关）, ALOHA Agent Control（智能体控制层）, ALOHA interaction/runtime contracts, and ALOHA-side Capability（能力）adapters. It does **not** require ALOHA to implement or own a generic Agent Runtime / Agent Framework.
 
-Agent execution is intentionally replaceable behind a Runtime Contract（运行时契约）. A Runtime Backend（运行时后端）may be Hermes Agent, OpenClaw, an n8n Agent workflow, an OpenAI-compatible runtime, Cloudflare Agents, a custom Python/TypeScript service, or a future implementation.
+Agent execution is intentionally replaceable behind a Runtime Contract（运行时契约）. For the MVP, the selected Primary Runtime Backend（主运行时后端）is **n8n Agent**: an n8n workflow configured as the Agent execution runtime. This is an MVP implementation choice, not a permanent product dependency; Hermes Agent, OpenClaw, OpenAI-compatible runtimes, Cloudflare Agents, custom Python/TypeScript services, or future implementations may replace it later through the same Runtime Contract / Adapter boundary.
 
 ## Open-source repository
 
@@ -51,19 +51,20 @@ First-party PWA / future clients       WeCom / Feishu / other channels
                               |
                        Runtime Contract
                               |
-                       Runtime Adapter
+                    n8n Runtime Adapter
                               |
-             +----------------+----------------+
-             |                |                |
-             v                v                v
-          Hermes           OpenClaw         n8n Agent
-                                             / custom runtime
+                              v
+                     n8n Agent Workflow
+                  (MVP Primary Runtime)
+                              |
+                              v
+                allowed Capability / Tool calls
 
 Runtime-accessible capabilities remain separately owned:
 LifeSpace / HomeMew / n8n workflows / Poina / Relay / ...
 ```
 
-The Gateway and Agent Control may initially be deployed on the same platform, but they remain separate logical responsibilities. The selected Runtime Backend may run on any suitable infrastructure.
+The Gateway and Agent Control may initially be deployed on the same platform, but they remain separate logical responsibilities. n8n is the MVP Primary Runtime Backend, while the Runtime Contract / Adapter boundary remains intentionally replaceable.
 
 ## Protocol direction
 
@@ -73,27 +74,30 @@ ALOHA owns its first-party Interaction Protocol. It must support progressive/str
 
 ### ALOHA -> Runtime
 
-ALOHA uses a replaceable Runtime Contract. OpenAI Responses / Chat-style protocols are useful compatibility profiles where a backend supports them, but they are not ALOHA's product contract. Backend-specific differences are isolated in Runtime Adapters.
+ALOHA uses a replaceable Runtime Contract. For the MVP, an **n8n Runtime Adapter** translates ALOHA Run / Context / Capability semantics into the selected n8n Agent workflow contract and normalizes n8n execution output back into ALOHA canonical events. n8n-native workflow/session payloads must not become the ALOHA client protocol.
+
+OpenAI Responses / Chat-style protocols may still be useful compatibility profiles for future backends, but they are not ALOHA's product contract.
 
 ## MVP
 
 The first milestone proves the complete path:
 
-`PWA -> Gateway -> Agent Control -> Runtime Adapter -> Runtime Backend -> Capability -> real execution`
+`PWA -> Gateway -> Agent Control -> n8n Runtime Adapter -> n8n Agent -> Capability -> real execution`
 
 The MVP should include:
 
 - text-first conversation with room for voice/image/file/location/context input;
 - a thin and stable Gateway;
 - an explicit Agent Control boundary owned by ALOHA;
-- a minimal Runtime Contract plus one selected Runtime Backend adapter;
-- progressive/streaming result delivery back to the first-party client;
-- at least one direct tool capability;
-- at least one n8n workflow capability;
+- a minimal Runtime Contract implemented by the n8n Runtime Adapter;
+- an n8n Agent workflow as the Primary Runtime Backend;
+- progressive/streaming-or-progressive-status result delivery back to the first-party client, normalized into ALOHA events;
+- at least one direct tool capability exposed to the n8n Agent;
+- at least one separate n8n workflow capability, proving that n8n can simultaneously host the Agent Runtime and expose independent Workflow Capabilities without conflating the two roles;
 - at least one authorized LifeSpace / HomeMew read-write scenario;
 - clear authorization boundaries between the personal ALOHA Assistant and the separate HomeMew Agent.
 
-The initial Runtime Backend is an implementation choice and is **not yet frozen**.
+The MVP Runtime selection is now **frozen to n8n Agent for the first vertical slice**. Runtime replaceability remains an architecture invariant, but evaluating or integrating a second backend is explicitly outside the first MVP slice.
 
 ## Read before changing the repository
 
@@ -128,7 +132,7 @@ docs/
   development.md
 ```
 
-Runtime adapters may later live in a dedicated `runtime-adapters/` or package structure once the first concrete backend is selected. Do not create a generic Agent framework merely to anticipate multiple backends.
+The first concrete Runtime Adapter should now be implemented explicitly for **n8n Agent**. Do not build a generic Agent framework around it; create only the smallest adapter/contracts needed for the first real vertical slice, while keeping n8n-specific payloads out of Gateway, first-party client contracts and generic Agent Control semantics.
 
 ## Getting started
 
@@ -155,8 +159,8 @@ npm run check
 1. ALOHA Assistant is a personal Agent product, not a generic Agent framework or multi-assistant platform.
 2. ALOHA owns its client interaction semantics and Agent product/control semantics; Agent execution backends remain replaceable.
 3. Gateway stays thin and channel/transport focused; Agent Control owns identity/context/capability/confirmation/Run policy.
-4. Runtime backends may be external products or custom implementations and must be isolated behind explicit adapters/contracts.
-5. n8n may be used either as a callable Workflow Capability or, when configured as an Agent, as a Runtime Backend; keep those roles explicit.
+4. **n8n Agent is the MVP Primary Runtime Backend**, isolated behind an explicit n8n Runtime Adapter and Runtime Contract.
+5. n8n may simultaneously be used as a callable Workflow Capability; the Agent Backend role and Workflow Capability role must remain explicit and separate.
 6. LifeSpace owns identity/shared reality; ALOHA consumes it through explicit authorization.
 7. Relay, Poina, Facet and notification infrastructure stay independent and are integrated through contracts.
 8. Keep the MVP small, but keep boundaries compatible with Runtime replacement and richer first-party interaction.
@@ -164,4 +168,4 @@ npm run check
 
 ## Status
 
-Repository skeleton initialized. Product and architecture baselines are still evolving with the MVP; the Runtime Backend has not been selected/frozen.
+Repository skeleton initialized. Product and architecture baselines are evolving with the MVP. **n8n Agent is selected as the Primary Runtime Backend for the MVP first vertical slice; the integration itself is planned, not yet claimed as implemented or verified.**
