@@ -14,6 +14,7 @@ Current sources of truth:
 - `docs/architecture.md` — current runtime/repository architecture
 - `docs/pwa-interaction.md` — current PWA interaction/product baseline
 - `docs/composer-state-machine.md` — Composer states, guards, invariants and implementation/test baseline
+- `docs/conversation-run-lifecycle.md` — Conversation / Run lifecycle, New Context, background Run management, History and Draft lifecycle
 - `docs/development.md` — toolchain, validation and lockfile baseline
 - `packages/contracts` — shared ALOHA interaction/capability protocol types
 
@@ -48,6 +49,7 @@ docs/
   architecture.md              # current repository boundaries and data flow
   pwa-interaction.md           # PWA interaction/product baseline
   composer-state-machine.md    # Composer implementation/test specification
+  conversation-run-lifecycle.md # Conversation / Run lifecycle and background execution management
   development.md               # local toolchain and validation baseline
 ```
 
