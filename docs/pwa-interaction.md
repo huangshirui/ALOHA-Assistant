@@ -53,6 +53,19 @@ It may contain:
 
 Historical turns are not permanently stacked on the main screen.
 
+### Working and progressive result
+
+After a Submission is accepted, the Surface uses a **process state -> progressive result** model:
+
+- show meaningful current execution state while ALOHA / Tool / Capability work is in progress;
+- progressively render result content as usable output becomes available instead of waiting for the entire run to finish;
+- do not expose private chain-of-thought or internal reasoning traces;
+- the user may continue preparing a new Composer draft while the current run is Working;
+- the user may explicitly Stop the current run;
+- sending a new Submission while a run is Working is an interrupting action: the accepted new Submission supersedes the current run and starts the new instruction rather than queueing behind it.
+
+Stop/interruption is best-effort for work that can still be cancelled. An operation already committed to an external system cannot be treated as automatically rolled back.
+
 ### Result-state input source
 
 After ALOHA completes a result, the surface should prioritize the result rather than leaving the full user input permanently expanded.
@@ -95,6 +108,16 @@ The expanded state supports:
 - explicit Send;
 - resource-only, text-only and mixed submissions.
 
+During Expanded dictation, the `+` resource entry is disabled. The user stops dictation before opening a resource picker.
+
+### Mobile collapse policy
+
+When the Mobile / Tablet system keyboard closes or Expanded Composer loses editing focus:
+
+- no text and no pending resources -> collapse to Compact Capsule;
+- text draft exists -> remain Expanded;
+- no text but pending resources exist -> collapse to Compact while keeping Pending Submission Area and all resources.
+
 ## Pending Submission Area（待提交区）
 
 Pending Submission Area is a separate staging area above Composer.
@@ -107,7 +130,8 @@ Rules:
 4. a resource can be tapped to preview;
 5. every resource has an explicit remove action (`×`);
 6. deleting the final resource hides the area;
-7. text draft and pending resources are combined only when creating one Submission（提交） snapshot.
+7. text draft and pending resources are combined only when creating one Submission（提交） snapshot;
+8. if any selected resource is still Uploading, Send is disabled; Send becomes eligible only after all resources required by the Submission are Ready.
 
 ## Voice input modes
 
@@ -122,7 +146,8 @@ The user keeps a finger pressed on the capsule, so transcription must not be hid
 - release without recognized text: do not send;
 - swipe upward with recognized text: stop voice, open Expanded Composer, put recognized text in the editor, place the caret after the final character and open the system keyboard;
 - swipe upward without recognized text: return to the capsule without opening an empty editor;
-- existing pending resources remain independent and are included only if an actual submission occurs.
+- existing pending resources remain independent and are included only if an actual submission occurs;
+- no independent Cancel gesture is required for MVP: swipe-up enters editable text and the user may delete it there.
 
 ### Expanded dictation（all devices）
 
@@ -130,10 +155,18 @@ Tapping the microphone starts continuous real-time speech-to-text without requir
 
 - recognized text is written directly into the text editor in real time at the active insertion point;
 - microphone changes to Stop;
-- Send is disabled while dictation is active;
+- Send and `+` are disabled while dictation is active;
 - tapping Stop ends recognition, keeps all recognized text and returns to normal Expanded Composer;
 - stopping dictation never auto-sends;
 - pending resources remain unchanged.
+
+### First microphone permission
+
+If microphone permission has not yet been granted, the first attempted voice action is used only to request browser / OS permission.
+
+- do not pretend recording started while the permission prompt is open;
+- after permission is granted, return to the stable pre-voice state and give a clear cue that microphone access is ready;
+- the user explicitly triggers voice input again to start STT; do not automatically resume the original long-press/tap after the system permission dialog closes.
 
 ## Annotation direction
 
@@ -153,10 +186,10 @@ That file is the implementation/test specification. This file stays at the produ
 
 These items are intentionally not treated as implementation facts yet:
 
-1. whether a new draft can be prepared while the previous ALOHA request is still Working;
-2. whether Send is disabled while any resource is still uploading, or whether Send may queue until uploads finish;
-3. whether `+` remains interactive during Expanded dictation;
-4. whether closing the Mobile system keyboard automatically collapses Expanded Composer back to the capsule;
-5. whether Compact long-press voice needs an independent Cancel gesture beyond release/send and swipe-up/edit;
-6. final gesture thresholds, haptic feedback and animation details;
-7. detailed Header iconography and current-surface reset semantics.
+1. interruption acceptance ordering: when a new Submission is sent during Working, whether the previous run is cancelled only after the new Submission is accepted, so a failed new request does not kill the old run;
+2. exact Surface presentation after explicit Stop / interruption, including treatment of partial progressive output;
+3. MVP resource support and limits: resource types, file-size limit, resource-count limit and image handling/compression policy;
+4. final gesture thresholds, haptic feedback and animation details;
+5. detailed Header iconography and current-surface reset semantics;
+6. final Result Input Source default presentation;
+7. history / prior-work-surface recall entry point.
