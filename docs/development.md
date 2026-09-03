@@ -127,14 +127,18 @@ Because the workflow has no `pull_request` deployment trigger, fork/PR code cann
 
 With the current Worker-only topology, the deployment token does not need Cloudflare Pages permissions.
 
-### Cloudflare runtime secrets
+### Cloudflare runtime secrets and bootstrap
 
-The n8n endpoint and bearer token belong to the Agent Control Worker, not GitHub source configuration. Configure them as Cloudflare Worker Secrets:
+The n8n endpoint and bearer token belong to the Agent Control Worker, not GitHub source configuration. Configure them as Cloudflare Worker Secrets after the first Worker deployment exists:
 
 - `N8N_AGENT_WEBHOOK_URL`
 - `N8N_AGENT_AUTH_TOKEN`
 
-`workers/agent-control/wrangler.jsonc` declares both names as required for the current M1 Header-Auth runtime bootstrap. Wrangler validates that the secrets already exist on the deployed Worker before a production deploy succeeds. Values are never placed in GitHub workflow YAML, Wrangler config, Actions logs or repository documentation.
+The first infrastructure deployment intentionally does **not** declare these as Wrangler `secrets.required`. This avoids a bootstrap deadlock where a not-yet-created Worker cannot already contain the secrets required for its own first deployment. The application already treats an unconfigured Runtime as an explicit state: without `N8N_AGENT_WEBHOOK_URL`, Agent Control returns `runtime_backend_not_configured` rather than attempting a Runtime call.
+
+After the first Agent Control Worker exists, add both values through Cloudflare Worker Secrets and run the M1 real-runtime verification. Once the runtime bootstrap is confirmed, `secrets.required` may be reintroduced as a hard deployment invariant so future deploys fail if required runtime bindings are removed.
+
+Secret values are never placed in GitHub workflow YAML, Wrangler config, Actions logs or repository documentation.
 
 Agent Control also sets `workers_dev: false` and `preview_urls: false`, so it has no direct public `workers.dev` or preview endpoint. Gateway reaches it through the `AGENT_CONTROL` Service Binding.
 
