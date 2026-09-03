@@ -46,9 +46,48 @@ describe('N8nAgentRuntimeAdapter', () => {
       backendRunId: 'execution-example',
     })
 
+    expect(fetchImpl.mock.calls[0]?.[0]).toEqual(
+      new URL('https://example.com/aloha-agent'),
+    )
     const requestInit = fetchImpl.mock.calls[0]?.[1]
     const headers = new Headers(requestInit?.headers)
     expect(headers.get('authorization')).toBe('Bearer synthetic-test-token')
+  })
+
+  it('rejects malformed or unsafe webhook URLs before network access', async () => {
+    const fetchImpl = vi.fn()
+    const malformedAdapter = new N8nAgentRuntimeAdapter(
+      { webhookUrl: 'not-a-url' },
+      fetchImpl,
+    )
+    const insecureAdapter = new N8nAgentRuntimeAdapter(
+      { webhookUrl: 'http://example.com/aloha-agent' },
+      fetchImpl,
+    )
+
+    await expect(malformedAdapter.run(runRequest)).rejects.toMatchObject({
+      code: 'n8n_invalid_config',
+      retryable: false,
+    })
+    await expect(insecureAdapter.run(runRequest)).rejects.toMatchObject({
+      code: 'n8n_invalid_config',
+      retryable: false,
+    })
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('normalizes network-level fetch failures separately from invalid configuration', async () => {
+    const adapter = new N8nAgentRuntimeAdapter(
+      { webhookUrl: 'https://example.com/aloha-agent' },
+      async () => {
+        throw new TypeError('synthetic network failure')
+      },
+    )
+
+    await expect(adapter.run(runRequest)).rejects.toMatchObject({
+      code: 'n8n_unreachable',
+      retryable: true,
+    })
   })
 
   it('normalizes retryable backend HTTP failures without reading the response body', async () => {

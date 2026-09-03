@@ -29,6 +29,30 @@ type FetchLike = (
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null
 
+const parseWebhookUrl = (value: string): URL => {
+  let url: URL
+
+  try {
+    url = new URL(value)
+  } catch {
+    throw new N8nRuntimeError(
+      'n8n_invalid_config',
+      'The n8n Agent runtime webhook URL is invalid.',
+      false,
+    )
+  }
+
+  if (url.protocol !== 'https:' || url.username || url.password) {
+    throw new N8nRuntimeError(
+      'n8n_invalid_config',
+      'The n8n Agent runtime webhook URL must use HTTPS without embedded credentials.',
+      false,
+    )
+  }
+
+  return url
+}
+
 export class N8nAgentRuntimeAdapter implements RuntimeAdapter {
   private readonly config: N8nAgentRuntimeConfig
   private readonly fetchImpl: FetchLike
@@ -39,6 +63,7 @@ export class N8nAgentRuntimeAdapter implements RuntimeAdapter {
   }
 
   async run(request: RuntimeRunRequest): Promise<RuntimeRunResult> {
+    const webhookUrl = parseWebhookUrl(this.config.webhookUrl)
     const headers = new Headers({
       'content-type': 'application/json',
     })
@@ -50,7 +75,7 @@ export class N8nAgentRuntimeAdapter implements RuntimeAdapter {
     let response: Response
 
     try {
-      response = await this.fetchImpl(this.config.webhookUrl, {
+      response = await this.fetchImpl(webhookUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify({
