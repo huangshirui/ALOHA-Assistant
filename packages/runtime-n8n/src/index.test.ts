@@ -76,19 +76,37 @@ describe('N8nAgentRuntimeAdapter', () => {
     expect(fetchImpl).not.toHaveBeenCalled()
   })
 
-  it('normalizes network-level fetch failures separately from invalid configuration', async () => {
-    const adapter = new N8nAgentRuntimeAdapter(
-      { webhookUrl: 'https://example.com/aloha-agent' },
-      async () => {
-        throw new TypeError('synthetic network failure')
-      },
-    )
+  it.each([
+    ['synthetic error 1042', 'n8n_worker_route_conflict', false],
+    ['synthetic error 1021', 'n8n_target_unavailable', false],
+    ['synthetic error 1024', 'n8n_target_unavailable', false],
+    ['Network connection lost.', 'n8n_network_connection_lost', true],
+    ['synthetic unknown fetch failure', 'n8n_unreachable', true],
+  ])(
+    'classifies fetch failure %s without exposing backend detail',
+    async (failureMessage, expectedCode, retryable) => {
+      const adapter = new N8nAgentRuntimeAdapter(
+        { webhookUrl: 'https://example.com/aloha-agent' },
+        async () => {
+          throw new TypeError(failureMessage)
+        },
+      )
 
-    await expect(adapter.run(runRequest)).rejects.toMatchObject({
-      code: 'n8n_unreachable',
-      retryable: true,
-    })
-  })
+      let caught: unknown
+      try {
+        await adapter.run(runRequest)
+      } catch (error) {
+        caught = error
+      }
+
+      expect(caught).toMatchObject({
+        code: expectedCode,
+        retryable,
+      })
+      expect(caught).toBeInstanceOf(Error)
+      expect((caught as Error).message).not.toContain(failureMessage)
+    },
+  )
 
   it('normalizes retryable backend HTTP failures without reading the response body', async () => {
     const adapter = new N8nAgentRuntimeAdapter(
