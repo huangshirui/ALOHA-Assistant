@@ -13,6 +13,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Use repository npm version
+        run: npm install --global npm@10.9.2
       # Switch to npm ci + npm cache after the first package-lock.json is committed.
       - run: npm install
       - run: npm run check
