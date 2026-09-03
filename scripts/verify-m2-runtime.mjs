@@ -1,11 +1,28 @@
 const gatewayUrl = (process.env.ALOHA_GATEWAY_URL ?? '').replace(/\/$/, '')
+const accessCookie = (process.env.CF_ACCESS_AUTHORIZATION_COOKIE ?? '').trim()
+const accessAssertion = (process.env.CF_ACCESS_JWT_ASSERTION ?? '').trim()
 
 if (!gatewayUrl) {
   console.error('ALOHA_GATEWAY_URL is required.')
   process.exit(2)
 }
 
+const requestHeaders = () => {
+  const headers = new Headers({ 'content-type': 'application/json' })
+  if (accessCookie) {
+    headers.set('cookie', `CF_Authorization=${accessCookie}`)
+  } else if (accessAssertion) {
+    headers.set('Cf-Access-Jwt-Assertion', accessAssertion)
+  }
+  return headers
+}
+
 const parseSseOutput = async (response) => {
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(
+      'Cloudflare Access did not authenticate the M2 verifier request; use a current CF_Authorization cookie.',
+    )
+  }
   if (!response.ok || !response.body) {
     throw new Error(`Interaction request failed with HTTP ${response.status}.`)
   }
@@ -67,12 +84,19 @@ const verifyCapabilityGrantGate = async () => {
     `${gatewayUrl}/v1/runtime/capabilities/math.calculate/invoke`,
     {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: requestHeaders(),
+      redirect: 'manual',
       body: JSON.stringify({
         input: { operation: 'add', left: 7, right: 5 },
       }),
     },
   )
+
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(
+      'The Runtime Capability callback path is still gated by Cloudflare Access. Configure the narrow path-specific Access bypass before activating M3.',
+    )
+  }
 
   const body = await response.text()
   let payload
@@ -114,7 +138,8 @@ const verifyRuntimeToolPath = async () => {
 
   const response = await fetch(`${gatewayUrl}/v1/interactions`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: requestHeaders(),
+    redirect: 'manual',
     body: JSON.stringify({
       requestId: crypto.randomUUID(),
       text,
