@@ -63,7 +63,8 @@ jobs:
           workingDirectory: workers/gateway
           command: deploy
 
-      - name: Verify deployed M1 runtime path
+      - name: Resolve deployed Gateway URL
+        id: gateway
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -94,4 +95,14 @@ jobs:
 
           gateway_url="https://aloha-gateway.${workers_subdomain}.workers.dev"
           echo "::add-mask::${gateway_url}"
-          ALOHA_GATEWAY_URL="$gateway_url" npm run verify:m1-runtime
+          echo "url=${gateway_url}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify deployed M1 runtime path
+        env:
+          ALOHA_GATEWAY_URL: ${{ steps.gateway.outputs.url }}
+        run: npm run verify:m1-runtime
+
+      - name: Verify deployed M2 capability path
+        env:
+          ALOHA_GATEWAY_URL: ${{ steps.gateway.outputs.url }}
+        run: npm run verify:m2-runtime
