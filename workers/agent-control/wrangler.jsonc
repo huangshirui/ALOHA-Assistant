@@ -5,6 +5,12 @@
   "compatibility_date": "2026-09-01",
   "workers_dev": false,
   "preview_urls": false,
+  "exports": {
+    "AlohaUserState": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
   "secrets": {
     "required": ["N8N_AGENT_WEBHOOK_URL", "N8N_AGENT_AUTH_TOKEN"]
   }
