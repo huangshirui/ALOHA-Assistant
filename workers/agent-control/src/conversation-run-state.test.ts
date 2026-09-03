@@ -3,9 +3,11 @@ import { describe, expect, it } from 'vitest'
 import {
   ConversationRunStateError,
   ConversationRunStore,
+  type StateStorage,
+  type StateTransaction,
 } from './conversation-run-state'
 
-class MemoryStorage {
+class MemoryStorage implements StateStorage {
   readonly values = new Map<string, unknown>()
 
   async get<T>(key: string): Promise<T | undefined> {
@@ -17,7 +19,7 @@ class MemoryStorage {
   }
 
   async transaction<T>(
-    closure: (transaction: MemoryStorage) => Promise<T>,
+    closure: (transaction: StateTransaction) => Promise<T>,
   ): Promise<T> {
     return closure(this)
   }
@@ -25,9 +27,7 @@ class MemoryStorage {
 
 const createStore = () => {
   const storage = new MemoryStorage()
-  const store = new ConversationRunStore(
-    storage as ConstructorParameters<typeof ConversationRunStore>[0],
-  )
+  const store = new ConversationRunStore(storage)
   return { storage, store }
 }
 
