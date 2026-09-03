@@ -17,7 +17,6 @@ jobs:
   deploy:
     name: Verify and deploy production
     runs-on: ubuntu-latest
-    environment: production
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -35,19 +34,18 @@ jobs:
       - name: Verify repository
         run: npm run check
 
-      - name: Validate deployment configuration
+      - name: Build Web static assets
+        run: npm run build:web
+
+      - name: Validate deployment credentials
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_PAGES_PROJECT_NAME: ${{ secrets.CLOUDFLARE_PAGES_PROJECT_NAME }}
-          ALOHA_GATEWAY_URL: ${{ vars.ALOHA_GATEWAY_URL }}
         shell: bash
         run: |
           set -euo pipefail
           test -n "$CLOUDFLARE_API_TOKEN" || { echo "Missing CLOUDFLARE_API_TOKEN"; exit 1; }
           test -n "$CLOUDFLARE_ACCOUNT_ID" || { echo "Missing CLOUDFLARE_ACCOUNT_ID"; exit 1; }
-          test -n "$CLOUDFLARE_PAGES_PROJECT_NAME" || { echo "Missing CLOUDFLARE_PAGES_PROJECT_NAME"; exit 1; }
-          test -n "$ALOHA_GATEWAY_URL" || { echo "Missing ALOHA_GATEWAY_URL repository/environment variable"; exit 1; }
 
       - name: Deploy Agent Control
         uses: cloudflare/wrangler-action@v3
@@ -57,28 +55,10 @@ jobs:
           workingDirectory: workers/agent-control
           command: deploy
 
-      - name: Deploy Gateway
+      - name: Deploy Gateway and Web assets
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: workers/gateway
           command: deploy
-
-      - name: Build Web for production
-        env:
-          VITE_GATEWAY_URL: ${{ vars.ALOHA_GATEWAY_URL }}
-        run: npm run build:web
-
-      - name: Deploy Web to Cloudflare Pages
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          workingDirectory: apps/web
-          command: >-
-            pages deploy dist
-            --project-name=${{ secrets.CLOUDFLARE_PAGES_PROJECT_NAME }}
-            --branch=main
-            --commit-hash=${{ github.sha }}
-          gitHubToken: ${{ secrets.GITHUB_TOKEN }}
