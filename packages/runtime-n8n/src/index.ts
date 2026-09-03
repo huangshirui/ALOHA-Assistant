@@ -109,7 +109,7 @@ export class N8nAgentRuntimeAdapter implements RuntimeAdapter {
     let response: Response
 
     try {
-      response = await this.fetchImpl(webhookUrl, {
+      response = await this.fetchImpl.call(undefined, webhookUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify({
