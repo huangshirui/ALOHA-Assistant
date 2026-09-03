@@ -235,13 +235,14 @@ const runtimeCapabilityDescriptors = async (
 
 const capabilityIdFromPath = (pathname: string): string | null => {
   const match = pathname.match(/^\/v1\/runtime\/capabilities\/([^/]+)\/invoke$/u)
+  const encodedCapabilityId = match?.[1]
 
-  if (!match) {
+  if (!encodedCapabilityId) {
     return null
   }
 
   try {
-    return decodeURIComponent(match[1])
+    return decodeURIComponent(encodedCapabilityId)
   } catch {
     return null
   }
