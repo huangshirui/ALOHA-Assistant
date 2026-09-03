@@ -122,26 +122,41 @@ describe('N8nAgentRuntimeAdapter', () => {
         caught = error
       }
 
-      expect(caught).toMatchObject({
-        code: expectedCode,
-        retryable,
-      })
+      expect(caught).toMatchObject({ code: expectedCode, retryable })
       expect(caught).toBeInstanceOf(Error)
       expect((caught as Error).message).not.toContain(failureMessage)
     },
   )
 
-  it('normalizes retryable backend HTTP failures without reading the response body', async () => {
-    const adapter = new N8nAgentRuntimeAdapter(
-      { webhookUrl: 'https://example.com/aloha-agent' },
-      async () => new Response('synthetic private backend detail', { status: 503 }),
-    )
+  it.each([
+    [401, 'n8n_auth_failed', false],
+    [403, 'n8n_auth_failed', false],
+    [404, 'n8n_endpoint_not_found', false],
+    [405, 'n8n_method_not_allowed', false],
+    [408, 'n8n_request_timeout', true],
+    [429, 'n8n_rate_limited', true],
+    [503, 'n8n_backend_error', true],
+    [400, 'n8n_http_error', false],
+  ])(
+    'classifies HTTP %s without reading backend response detail',
+    async (status, expectedCode, retryable) => {
+      const adapter = new N8nAgentRuntimeAdapter(
+        { webhookUrl: 'https://example.com/aloha-agent' },
+        async () => new Response('synthetic private backend detail', { status }),
+      )
 
-    await expect(adapter.run(runRequest)).rejects.toMatchObject({
-      code: 'n8n_http_error',
-      retryable: true,
-    })
-  })
+      let caught: unknown
+      try {
+        await adapter.run(runRequest)
+      } catch (error) {
+        caught = error
+      }
+
+      expect(caught).toMatchObject({ code: expectedCode, retryable })
+      expect(caught).toBeInstanceOf(Error)
+      expect((caught as Error).message).not.toContain('synthetic private backend detail')
+    },
+  )
 
   it('rejects responses that do not implement the adapter contract', async () => {
     const adapter = new N8nAgentRuntimeAdapter(
