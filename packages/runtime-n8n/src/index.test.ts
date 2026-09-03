@@ -1,31 +1,30 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { RuntimeRunRequest } from '@aloha/contracts'
+import type { CanonicalRunEnvelopeV1 } from '@aloha/contracts'
 import { N8nAgentRuntimeAdapter } from './index'
 
-const runRequest: RuntimeRunRequest = {
-  requestId: 'request-example',
-  runId: 'run-example',
-  conversationId: 'conversation-example',
+const envelope: CanonicalRunEnvelopeV1 = {
+  schemaVersion: 1,
+  run: {
+    requestId: 'request-example',
+    runId: 'run-example',
+    conversationId: 'conversation-example',
+  },
   input: { text: 'Hello ALOHA' },
+  identity: {
+    principal: { type: 'user', id: 'usr_example' },
+    actor: { type: 'agent', id: 'agt_example' },
+    application: { id: 'app_example' },
+  },
+  context: { channel: 'web' },
   capabilities: [],
 }
 
 describe('N8nAgentRuntimeAdapter', () => {
-  it('maps the ALOHA runtime request to the n8n workflow contract', async () => {
+  it('passes Canonical Run Envelope v1 to the n8n workflow unchanged', async () => {
     const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body)) as Record<string, unknown>
-
-      expect(body).toEqual({
-        schemaVersion: 1,
-        run: {
-          requestId: 'request-example',
-          runId: 'run-example',
-          conversationId: 'conversation-example',
-        },
-        input: { text: 'Hello ALOHA' },
-        capabilities: [],
-      })
+      expect(body).toEqual(envelope)
 
       return Response.json({
         outputText: 'Hello from n8n',
@@ -41,7 +40,7 @@ describe('N8nAgentRuntimeAdapter', () => {
       fetchImpl,
     )
 
-    await expect(adapter.run(runRequest)).resolves.toEqual({
+    await expect(adapter.run(envelope)).resolves.toEqual({
       outputText: 'Hello from n8n',
       backendRunId: 'execution-example',
     })
@@ -52,6 +51,20 @@ describe('N8nAgentRuntimeAdapter', () => {
     const requestInit = fetchImpl.mock.calls[0]?.[1]
     const headers = new Headers(requestInit?.headers)
     expect(headers.get('authorization')).toBe('Bearer synthetic-test-token')
+  })
+
+  it('passes an explicit null identity used only by the legacy deployment-verification path', async () => {
+    const fetchImpl = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      const body = JSON.parse(String(init?.body)) as CanonicalRunEnvelopeV1
+      expect(body.identity).toBeNull()
+      return Response.json({ outputText: 'legacy verification' })
+    })
+    const adapter = new N8nAgentRuntimeAdapter(
+      { webhookUrl: 'https://example.com/aloha-agent' },
+      fetchImpl,
+    )
+
+    await adapter.run({ ...envelope, identity: null })
   })
 
   it('invokes fetch without binding the adapter as the receiver', async () => {
@@ -70,7 +83,7 @@ describe('N8nAgentRuntimeAdapter', () => {
       fetchImpl,
     )
 
-    await expect(adapter.run(runRequest)).resolves.toEqual({
+    await expect(adapter.run(envelope)).resolves.toEqual({
       outputText: 'receiver-safe',
       backendRunId: undefined,
     })
@@ -88,11 +101,11 @@ describe('N8nAgentRuntimeAdapter', () => {
       fetchImpl,
     )
 
-    await expect(malformedAdapter.run(runRequest)).rejects.toMatchObject({
+    await expect(malformedAdapter.run(envelope)).rejects.toMatchObject({
       code: 'n8n_invalid_config',
       retryable: false,
     })
-    await expect(insecureAdapter.run(runRequest)).rejects.toMatchObject({
+    await expect(insecureAdapter.run(envelope)).rejects.toMatchObject({
       code: 'n8n_invalid_config',
       retryable: false,
     })
@@ -117,7 +130,7 @@ describe('N8nAgentRuntimeAdapter', () => {
 
       let caught: unknown
       try {
-        await adapter.run(runRequest)
+        await adapter.run(envelope)
       } catch (error) {
         caught = error
       }
@@ -147,7 +160,7 @@ describe('N8nAgentRuntimeAdapter', () => {
 
       let caught: unknown
       try {
-        await adapter.run(runRequest)
+        await adapter.run(envelope)
       } catch (error) {
         caught = error
       }
@@ -164,7 +177,7 @@ describe('N8nAgentRuntimeAdapter', () => {
       async () => Response.json({ text: 'wrong field' }),
     )
 
-    await expect(adapter.run(runRequest)).rejects.toMatchObject({
+    await expect(adapter.run(envelope)).rejects.toMatchObject({
       code: 'n8n_invalid_response',
       retryable: false,
     })
