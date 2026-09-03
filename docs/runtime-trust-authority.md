@@ -35,6 +35,31 @@ In plain language:
 - **Confirmation decides: Has the user approved this exact action when approval is required?**
 - **The Runtime decides: How does the reasoning/tool loop execute within the authority it actually possesses?**
 
+## Runtime Contract and capability degradation
+
+ALOHA does **not** require every Runtime Backend to enforce every ALOHA control semantic with the same strength.
+
+The Runtime Contract（运行时契约）expresses the ALOHA semantics a backend may need to support, such as current-Run capability exposure, confirmation/resume behavior and context propagation. The Runtime Adapter（运行时适配器）maps those semantics onto the concrete controls actually available in that Runtime.
+
+If a Runtime cannot enforce one of those semantics, the adapter must degrade explicitly rather than pretending full enforcement exists. For example it may:
+
+- expose only the subset that the Runtime can safely support;
+- treat a policy as behavioral guidance rather than hard confinement;
+- route a sensitive operation through an ALOHA-mediated endpoint even if ordinary tools remain Runtime-native;
+- move a confirmation-gated operation out of the Runtime and execute it through trusted ALOHA code after approval;
+- or declare that a particular capability/control level is unsupported for that Runtime profile.
+
+This means Runtime replaceability is based on **semantic compatibility with explicit degradation**, not on forcing every backend into an identical security model.
+
+The minimum safety floor remains the owning system's own authorization boundary. For LifeSpace-owned data/actions, LifeSpace must still authenticate the effective Principal / Actor / Application context and re-check current authority on execution. A weaker external Runtime must not be allowed to turn ALOHA policy weakness into additional LifeSpace authority.
+
+A Runtime Adapter therefore answers two different questions:
+
+1. **How do I translate ALOHA semantics into this Runtime?**
+2. **Which of those semantics can this Runtime actually enforce, and what is the defined degradation for the rest?**
+
+Do not build a generic Runtime feature-negotiation framework in the MVP. Record the concrete support/degradation behavior when a real backend needs it.
+
 ## Prompt is not a security boundary
 
 System prompts, tool descriptions and model instructions are useful behavior guidance, but they are **not authorization enforcement**.
