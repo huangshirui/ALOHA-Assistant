@@ -1,0 +1,142 @@
+{
+  "name": "ALOHA M2 Direct Capability Runtime",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "aloha-m2-direct-capability",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [0, 0],
+      "id": "12111111-1111-4111-8111-111111111111",
+      "name": "ALOHA Runtime Webhook",
+      "webhookId": "22111111-1111-4111-8111-111111111111"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.body.input.text }}",
+        "options": {
+          "systemMessage": "You are the execution backend for ALOHA Assistant's M2 direct-capability verification. For arithmetic that can be expressed as one add, subtract, multiply, or divide operation, use the connected Math Calculate tool and base the answer on its result. Never invent capability URLs, grants, identity, permissions, private context, or external capabilities. Only connected tools supplied by the trusted ALOHA control layer are callable."
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [320, 0],
+      "id": "32111111-1111-4111-8111-111111111111",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "gpt-4o-mini"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [240, 240],
+      "id": "42111111-1111-4111-8111-111111111111",
+      "name": "Example Chat Model"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Use the ALOHA-authorized math.calculate capability to perform exactly one add, subtract, multiply, or divide operation on two finite numbers.",
+        "method": "POST",
+        "url": "={{ $('ALOHA Runtime Webhook').item.json.body.capabilities.find((capability) => capability.id === 'math.calculate').invocation.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $('ALOHA Runtime Webhook').item.json.body.capabilities.find((capability) => capability.id === 'math.calculate').invocation.authorization }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { input: { operation: $fromAI('operation', 'One of: add, subtract, multiply, divide.', 'string'), left: $fromAI('left', 'The left numeric operand.', 'number'), right: $fromAI('right', 'The right numeric operand.', 'number') } } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [480, 240],
+      "id": "52111111-1111-4111-8111-111111111111",
+      "name": "Math Calculate"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { outputText: $json.output, backendRunId: $execution.id } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.4,
+      "position": [640, 0],
+      "id": "62111111-1111-4111-8111-111111111111",
+      "name": "Normalize Runtime Result"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "ALOHA Runtime Webhook": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Example Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Math Calculate": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Normalize Runtime Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}
