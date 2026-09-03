@@ -66,6 +66,26 @@ describe('agent-control slice 1', () => {
     expect(body).not.toContain('event: run.failed')
   })
 
+  it('normalizes invalid runtime configuration into a safe run.failed event', async () => {
+    const fetchImpl = vi.fn()
+    vi.stubGlobal('fetch', fetchImpl)
+
+    const response = await worker.fetch(
+      new Request('https://example.com/v1/interactions', {
+        method: 'POST',
+        body: JSON.stringify({ text: 'Hello' }),
+      }),
+      { N8N_AGENT_WEBHOOK_URL: 'not-a-url' },
+    )
+
+    const body = await response.text()
+    expect(body).toContain('event: run.started')
+    expect(body).toContain('event: run.failed')
+    expect(body).toContain('n8n_invalid_config')
+    expect(body).not.toContain('not-a-url')
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
   it('normalizes backend failure into a safe run.failed event', async () => {
     vi.stubGlobal(
       'fetch',
