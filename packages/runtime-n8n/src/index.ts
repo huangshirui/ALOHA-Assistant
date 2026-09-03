@@ -53,6 +53,40 @@ const parseWebhookUrl = (value: string): URL => {
   return url
 }
 
+const classifyFetchFailure = (error: unknown): N8nRuntimeError => {
+  const message = error instanceof Error ? error.message : ''
+
+  if (message.includes('1042')) {
+    return new N8nRuntimeError(
+      'n8n_worker_route_conflict',
+      'The n8n Agent runtime route conflicts with a same-zone Worker route.',
+      false,
+    )
+  }
+
+  if (message.includes('1021') || message.includes('1024')) {
+    return new N8nRuntimeError(
+      'n8n_target_unavailable',
+      'The n8n Agent runtime target is unavailable from this Worker.',
+      false,
+    )
+  }
+
+  if (message.toLowerCase().includes('network connection lost')) {
+    return new N8nRuntimeError(
+      'n8n_network_connection_lost',
+      'The network connection to the n8n Agent runtime was lost.',
+      true,
+    )
+  }
+
+  return new N8nRuntimeError(
+    'n8n_unreachable',
+    'The n8n Agent runtime could not be reached.',
+    true,
+  )
+}
+
 export class N8nAgentRuntimeAdapter implements RuntimeAdapter {
   private readonly config: N8nAgentRuntimeConfig
   private readonly fetchImpl: FetchLike
@@ -89,12 +123,8 @@ export class N8nAgentRuntimeAdapter implements RuntimeAdapter {
           capabilities: request.capabilities,
         }),
       })
-    } catch {
-      throw new N8nRuntimeError(
-        'n8n_unreachable',
-        'The n8n Agent runtime could not be reached.',
-        true,
-      )
+    } catch (error) {
+      throw classifyFetchFailure(error)
     }
 
     if (!response.ok) {
