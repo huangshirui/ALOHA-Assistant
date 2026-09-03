@@ -39,9 +39,9 @@ The first Direct Tool（直接工具） is intentionally deterministic and low-r
 - execution mode: `sync`
 - external provider/domain dependency: none
 
-This capability is deliberately authority-free. M2 therefore does **not** invent a fake Principal（权限主体） or pretend that trusted LifeSpace Identity / Grant integration already exists. Capabilities that require user/domain authority remain gated on the later trusted LifeSpace Identity / Agent Ready slice.
+This capability is deliberately authority-free. M2 therefore does **not** invent a fake Principal（权限主体） or pretend that trusted LifeSpace Identity / Grant integration already exists. Capabilities that require user/domain authority remain gated on the later trusted Identity slice.
 
-`math.calculate` is a technical proving capability, not the representative long-term reason for ALOHA Capability infrastructure. The next higher-value slice uses real LifeSpace Identity（身份）, Runtime Discovery（运行时发现） and domain authority rather than expanding arithmetic into a generic permission model.
+`math.calculate` is a technical proving capability, not the representative long-term reason for ALOHA Capability infrastructure. After deployment verification, the next architecture milestone is **Canonical Run Envelope v1 + Conversation / Run state + LifeSpace Identity binding**, rather than expanding arithmetic into a generic permission model.
 
 ## Canonical capability metadata
 
@@ -210,4 +210,4 @@ M2 does not claim:
 - a second Runtime Backend;
 - a n8n Workflow Capability（工作流能力）.
 
-The next MVP slice after M2 deployment verification is **LifeSpace Identity + Agent Ready read-only integration**, followed by controlled mutation / semantic Action / Confirmation. The separate n8n Workflow Capability is intentionally later in the MVP sequence.
+The next MVP slice after M2 deployment verification is **Canonical Run Envelope v1 + Conversation / Run persistence + LifeSpace Identity binding**. Real LifeSpace Core / n8n Workflow capabilities are then added as Runtime Tools according to product value; Confirmation is introduced only when the first real action requires it.
