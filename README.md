@@ -125,7 +125,7 @@ Voice production polish, arbitrary file/video/location inputs, full Settings, Fa
 6. **MVP Client — parallel track:** implement the State-first Current Work Surface, Desktop/Mobile Composer, text, image, normalized Run/error/permission states, and M4 confirmation UI while M3/M4 backend work progresses.
 7. **MVP closure:** deployment acceptance, deny/failure paths, public-repository safety and only the Run/Event normalization required by the usable client.
 
-GitHub execution anchors: #20 (M3), #21 (M4), #22 (M5), #23 (MVP Client); #17 is the ALOHA consumer acceptance umbrella for the LifeSpace Contract Baseline across M3/M4.
+These phases are the internal implementation sequence, not a requirement to create one public GitHub Issue per phase. Public issues should represent externally understandable, independently actionable or independently verifiable work; transient milestone decomposition stays in the project plan.
 
 ## Read before changing the repository
 
@@ -212,4 +212,4 @@ M2 adds the first real ALOHA-managed Direct Capability（直接能力） in sour
 
 The current gate is only **M2 deployment verification**: configure the deployment-only `CAPABILITY_GRANT_SIGNING_KEY`, publish the M2 n8n workflow, and prove that n8n actually invokes `Math Calculate` according to `docs/direct-capability.md`.
 
-After that, the next critical milestone is **M3 LifeSpace Identity + Agent Ready read-only integration (#20)**, followed by **M4 real LifeSpace mutation / semantic Action / Confirmation (#21)**. The separate n8n Workflow Capability moves to M5 (#22), while the first-party client work proceeds in parallel (#23).
+After that, the internal MVP sequence is LifeSpace Identity + Agent Ready read-only integration, then real LifeSpace mutation / semantic Action / Confirmation, then the separate n8n Workflow Capability; first-party client work proceeds in parallel. Public GitHub issues are created only when a work item is independently useful to track or verify.
