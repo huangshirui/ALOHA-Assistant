@@ -1,267 +1,249 @@
 # ALOHA Assistant architecture baseline
 
-This document records the current target boundary for implementation. ALOHA Assistant is a **personal Agent product**. It is not a generic Agent Framework and it does not require a self-built Agent Runtime engine.
-
-## Product boundary
-
-ALOHA Assistant owns the personalized client experience and the product semantics that must remain stable even when Agent execution technology changes.
-
-HomeMew Agent is a separate, peer Agent product. ALOHA may access HomeMew / LifeSpace capabilities only through the user's authorized intersection of Principal permissions and ALOHA Application scopes.
+This document records the current target boundary for implementation. ALOHA Assistant is a **personal Agent product**, not a generic Agent Framework.
 
 ## Core architecture
 
 ```text
-First-party PWA / future clients       WeCom / Feishu / future channels
-              |                                   |
-              +---------------+-------------------+
-                              |
-                              v
-                       Gateway（网关）
-               channel + transport boundary
-                              |
-                              v
-               Agent Control（智能体控制层）
-      identity / authorization / context / capability policy
-        confirmation / Conversation / Run / runtime selection
-                              |
-                    Runtime Contract（运行时契约）
-                              |
-                 n8n Runtime Adapter（MVP）
-                              |
-                              v
-                 n8n Agent Workflow（MVP）
-                 Primary Runtime Backend
-                              |
-                              v
-             ALOHA-managed Capability calls
-             + Runtime-native Tools as configured
-                              |
-       +----------------------+----------------------+
-       |                      |                      |
-       v                      v                      v
-   LifeSpace              HomeMew                 n8n workflows
-       |                                             |
-       +---------------- later: Poina / Relay / ...--+
+First-party PWA / future channels
+              |
+              v
+       Gateway（网关）
+  ALOHA Interaction Protocol
+              |
+              v
+ Agent Control（智能体控制层） <---- LifeSpace Identity
+  Conversation / Run state
+  Identity / Context / Policy
+              |
+              v
+Canonical Run Envelope（规范运行信封）
+              |
+              v
+ Runtime Adapter（运行时适配器）
+              |
+              v
+      Runtime Backend
+      n8n Agent (MVP)
+              |
+      +-------+---------+---------+
+      |       |         |         |
+      v       v         v         v
+ LifeSpace  n8n      Search /   future
+ Core Tool  Workflow  other Tool  Tools
 ```
 
-The diagram shows logical boundaries, not mandatory deployment topology. Gateway and Agent Control may initially run on the same infrastructure. For the MVP first vertical slice, **n8n Agent is the selected Primary Runtime Backend（主运行时后端）**. The Runtime Contract / Adapter boundary remains stable so another backend can replace n8n later without redefining ALOHA product semantics.
+The architecture has two stable protocol boundaries:
 
-For the current Cloudflare MVP deployment, the first-party Web/PWA is served as Static Assets（静态资源） by the public Gateway Worker. Agent Control is deployed as a separate internal-only Worker reached through a Service Binding（服务绑定）. This physical split preserves one public ALOHA origin without changing the logical architecture above.
+1. **Gateway -> Agent Control:** ALOHA Interaction Protocol（ALOHA 交互协议）.
+2. **Agent Control -> Runtime Adapter:** Canonical Run Envelope（规范运行信封）under the Runtime Contract（运行时契约）.
 
-## MVP Runtime decision
+The Runtime Adapter converts that Envelope into whatever concrete request the selected Runtime needs and normalizes the Runtime result back into ALOHA events.
 
-The MVP Runtime selection is **frozen to n8n Agent** for the first end-to-end implementation.
+## Gateway（网关）
 
-This means:
+Gateway is the channel/transport boundary.
 
-- one n8n workflow configured as an Agent executes the model/reasoning/tool loop for an ALOHA Run;
-- ALOHA Agent Control still owns Identity / Authorization context consumption, Context Envelope, ALOHA-managed Capability exposure, Confirmation policy, Conversation / Run product semantics and canonical client events;
-- an explicit **n8n Runtime Adapter** translates between ALOHA Runtime Contract semantics and the n8n Agent workflow's native input/output/execution model;
-- n8n workflow/session/execution payloads must not leak into the ALOHA first-party Interaction Protocol;
-- the MVP does not need a second Runtime Backend or generic multi-runtime framework;
-- future Runtime replacement remains an architectural invariant, not an MVP feature.
+It owns:
 
-The decision is deliberately pragmatic: n8n is already part of the user's automation stack, is suitable for quickly composing model + tools + workflows, and can validate the complete ALOHA control/runtime boundary with low implementation cost. This does **not** make n8n the ALOHA product identity, authorization authority, Shared Reality source, or permanent architecture core.
+- external request admission and authentication handoff;
+- first-party / future channel adaptation;
+- ALOHA Interaction Protocol transport;
+- HTTP/SSE/session transport and routing;
+- transport-level controls.
 
-## Why Agent Control exists
+Gateway does **not** own model reasoning, Tool Loop, Conversation / Run product state, Confirmation policy or business/domain semantics.
 
-Gateway answers: **how does a request enter/leave ALOHA?**
+## Agent Control（智能体控制层）
 
-Agent Control answers: **under whose authority, with what context, ALOHA-managed capabilities and policies should this ALOHA Run execute?**
+Agent Control sits directly between Gateway and Runtime Adapter.
 
-Agent Control is deliberately separate from a generic Agent Runtime engine. It owns ALOHA product semantics and prepares a runtime-neutral execution request.
+Its input is a request already normalized to the ALOHA Interaction Protocol. Its primary downstream output is the Canonical Run Envelope.
 
-### Agent Control owns
+For the MVP, Agent Control has five core responsibilities:
 
-- verified Identity / Principal context consumption;
-- Application Context and authorization context consumption;
-- Context Envelope policy and assembly;
-- ALOHA-managed Capability exposure;
-- confirmation / approval policy;
-- Conversation / Run product semantics;
-- runtime selection;
-- conversion between ALOHA canonical events and backend-native runtime events;
-- policy around how LifeSpace, HomeMew, Poina, Relay, n8n and other systems are exposed to a Runtime through ALOHA-managed paths.
+1. **Conversation / Run state** — create, persist and update the ALOHA Conversation（会话）and Run（执行）state required by the product lifecycle. Backend execution/session ids remain correlations, not ALOHA product identity.
+2. **Trusted identity binding** — use LifeSpace Identity（身份）to know the current user and establish the ALOHA Principal（权限主体）, Actor（执行者）and Application Context（应用上下文）needed by the Run.
+3. **Context / policy assembly** — attach only Context and ALOHA product policy required by the current real scenario. Context such as time, location, device, selected content or resources is added incrementally rather than pre-designed exhaustively.
+4. **Canonical Run Envelope** — produce the stable Runtime-facing ALOHA request independent of n8n-native workflow/session payloads.
+5. **Canonical events** — accept Runtime status/result/error and map it back into ALOHA Run / Stream events for the client.
 
-Agent Control can narrow what ALOHA itself exposes or executes for a Run. It does not magically remove Runtime-native tools, credentials or authority that an external Runtime already owns independently. See `docs/runtime-trust-authority.md`.
+Agent Control is **not** the model/runtime engine. It does not own the reasoning loop or generic Tool Loop.
 
-### Runtime Backend owns
+## Canonical Run Envelope（规范运行信封）
 
-Depending on the backend, it may own:
+The Canonical Run Envelope is the stable ALOHA-side contract between Agent Control and Runtime Adapter.
 
-- model invocation and reasoning loop;
-- tool-call loop / orchestration;
-- runtime-native session mechanics;
-- compaction / retry / recovery;
-- backend-specific persistence and scheduling;
-- runtime-specific optimizations;
-- Runtime-native tools/connectors configured independently from ALOHA.
-
-For the MVP these responsibilities are implemented by the selected n8n Agent workflow where n8n supports them. They remain implementation concerns unless ALOHA explicitly promotes a semantic into its stable product contract.
-
-## Protocol boundaries
-
-### Northbound: ALOHA Interaction Protocol（ALOHA 交互协议）
-
-ALOHA owns the protocol used by its first-party clients. It must support progressive/streaming interaction and is allowed to evolve beyond conventional chat-message protocols.
-
-Canonical semantics may include, as they become real requirements:
-
-- Run accepted / started / completed / failed / cancelled;
-- output delta / structured output;
-- tool/activity progress;
-- confirmation required / confirmed / denied;
-- artifact/resource available;
-- clarification/input required;
-- annotations and richer interaction events.
-
-Transport is separate from semantics. HTTP + SSE may be the MVP transport; WebSocket or other transports can be added later without redefining all product events.
-
-Third-party channels use channel adapters. A channel may explicitly degrade features it cannot represent; third-party channel limitations must not constrain the first-party protocol to the lowest common denominator.
-
-### Southbound: Runtime Contract（运行时契约）
-
-Agent Control reaches Runtime Backends through an explicit adapter boundary.
-
-For the MVP, the concrete backend is **n8n Agent** and the first adapter is the **n8n Runtime Adapter**. The adapter must map at least:
-
-- ALOHA Run identity and correlation;
-- normalized Context Envelope fields required by the workflow;
-- the ALOHA-managed Capability set or callable endpoints exposed for the Run;
-- acceptance / running / progress / result / failure semantics;
-- cancellation / supersession behavior to the extent n8n can support it;
-- backend errors into ALOHA machine-readable errors and canonical events.
-
-The Runtime Contract expresses stable ALOHA semantics; a Runtime Adapter implements those semantics using the concrete controls actually available in its backend. A backend is not required to provide identical enforcement strength for every semantic. When a control cannot be enforced, the adapter must use an explicit degradation strategy rather than pretending it has hard control. The owning system's authorization remains the minimum safety floor: for example, LifeSpace re-checks current Principal / Actor / Application authority when its data or actions are invoked.
-
-Do not build a generic feature-negotiation framework for this in the MVP. Record concrete support and degradation only when a real Runtime needs it. See `docs/runtime-trust-authority.md`.
-
-The adapter should be the smallest concrete contract needed for this first vertical slice. Do not design a generalized Runtime Framework before a second backend exists.
-
-OpenAI Responses / Chat-style APIs remain useful compatibility profiles for future backends, but ALOHA must not define its internal product contract as identical to one provider protocol.
-
-Future Runtime Backend candidates may include Hermes Agent, OpenClaw, OpenAI-compatible Agent services, Cloudflare Agents, custom Python/TypeScript runtimes using OpenAI Agents SDK / LangGraph, or later systems. They are **not MVP implementation targets**.
-
-## Context Envelope（上下文信封）
-
-Context is a first-class ALOHA product concern rather than an unstructured prompt blob.
-
-Expected categories include:
-
-- **Identity Context** — server-verified Principal/Actor/Application attribution;
-- **Authorization Context** — server-verified grants/scopes/policy decisions;
-- **Environment Context** — time, timezone, locale and other environment facts;
-- **Device Context** — client/device capabilities and relevant client state;
-- **Location Context** — coordinates/accuracy/timestamp/consent when explicitly supplied;
-- **Interaction Context** — current surface, selection, annotation or references;
-- **Resources** — images, files and other submitted references.
-
-Client-provided context is contextual evidence, not authorization authority. Context fields should preserve source, capture time/freshness and sensitivity/consent semantics where relevant.
-
-The n8n Runtime Adapter may transform this structure into the shape required by the MVP n8n Agent workflow, but the n8n workflow payload is not the canonical ALOHA Context model.
-
-## Capability boundary
-
-A Runtime must not receive broad ALOHA-managed authority merely because it is executing ALOHA.
-
-Conceptually, ALOHA-managed exposed capabilities are bounded by:
-
-`verified Principal authority ∩ ALOHA Application scope ∩ current Run policy`
-
-This formula describes the ALOHA-managed surface only. Runtime-native tools configured independently in n8n, Hermes or another backend remain outside Agent Control unless the backend exposes a real enforceable mechanism that the Runtime Adapter uses.
-
-Capability adapters may expose LifeSpace, HomeMew, n8n workflows, Relay, Poina and future systems while preserving their independent domain ownership. For LifeSpace-owned operations, LifeSpace remains the final Identity / domain authorization authority; ALOHA consumes and narrows that authority rather than reimplementing it.
-
-### M2 concrete Direct Capability boundary
-
-M2 instantiates this boundary with the first Direct Capability（直接能力）, `math.calculate`. It is deliberately deterministic, low-risk, idempotent and authority-free so the first slice can prove Capability exposure and invocation without pretending that trusted LifeSpace Principal / Grant integration already exists.
-
-For each Run, Agent Control selects only ALOHA-managed capabilities allowed by the authority/context currently available. In M2, that means only a capability requiring no scopes and no confirmation may be exposed. When capability-grant signing is not configured, the exposed set is empty.
-
-For each exposed capability, Agent Control mints a short-lived signed Capability Grant（能力授权令牌） bound to that Run, Application and capability id. The Runtime receives the canonical capability metadata plus an HTTP invocation descriptor carrying only that narrow temporary authority. It does **not** receive the signing key or a static broad ALOHA credential.
-
-The external n8n Runtime calls the capability through the public Gateway route:
+The MVP goal is not a large universal schema. The first version should stabilize only the categories already required by real behavior:
 
 ```text
-POST /v1/runtime/capabilities/:capabilityId/invoke
-  -> Gateway (transport/routing only)
-  -> Agent Control (grant verification + policy enforcement)
-  -> Capability execution
+Run
+- requestId
+- conversationId
+- runId
+
+Input
+- text
+- resources/attachments when supported
+
+Identity
+- trusted current execution identity/context needed by the Runtime/tool path
+
+Context
+- only fields currently required by the product slice
+
+Capabilities / Policy
+- only ALOHA-managed capability or Confirmation information currently implemented
 ```
 
-Gateway does not decide whether a Capability is allowed. Agent Control verifies the grant and re-checks the admitted capability requirements before execution.
+The current source-level Runtime contract is intentionally smaller and already carries request / Conversation / Run correlation, input and ALOHA-managed capability descriptors. M3 evolves that existing contract into an explicit Canonical Run Envelope v1; this document does not claim that the target Envelope is already fully implemented.
 
-The M2 grant can be replayed during its short validity window. That is acceptable only for the first idempotent, low-risk arithmetic capability. Mutating or high-impact capabilities must add the appropriate confirmation, idempotency and replay semantics before they are exposed.
+The Envelope is **not the same thing as a model prompt**. Runtime Adapter / Runtime implementation decides how relevant fields are mapped to model input, Tool configuration or execution metadata.
 
-The n8n Agent remains the reasoning/tool-loop Runtime Backend. Its M2 HTTP Tool is only a Runtime-specific representation of the ALOHA `math.calculate` capability; n8n does not become the canonical Capability registry or authorization authority. See `docs/direct-capability.md` for the concrete contract and deployment acceptance criteria.
+## Runtime Adapter（运行时适配器）
 
-n8n has two valid roles and the MVP intentionally exercises both:
+Runtime Adapter has one main job:
 
-1. **Runtime Backend** — the selected n8n Agent workflow executes the ALOHA Run through the n8n Runtime Adapter.
-2. **Workflow / Integration Capability** — the Agent may call a separate n8n workflow as a Tool/Capability.
+> translate the Canonical Run Envelope into the concrete Runtime request, then translate Runtime output back into ALOHA semantics.
 
-These roles must remain explicit and must not be conflated. A workflow hosting the Agent Runtime is not automatically the same thing as every n8n workflow capability.
+The Adapter should remain as thin as the Runtime allows.
+
+Because the MVP n8n Agent workflow is controlled by this project, the workflow itself can actively conform to the ALOHA Runtime Contract. Therefore n8n Agent is architecturally similar to a self-built Runtime implementation; it does not need to be treated as a special third-party compatibility problem.
+
+Do not build generic Runtime feature negotiation, profile management or a universal Adapter framework in the MVP.
+
+## Runtime Backend（运行时后端）
+
+Runtime owns the actual execution engine, including as applicable:
+
+- model invocation / reasoning loop;
+- Tool Call Loop（工具调用循环）;
+- Runtime-native execution/session state;
+- Runtime-specific retry/recovery/orchestration;
+- the concrete Tool connections available to that Runtime instance/workflow.
+
+### MVP Runtime
+
+The only MVP Runtime is **n8n Agent**.
+
+ALOHA controls the n8n Agent workflow, so the workflow may be designed around the stable Canonical Run Envelope rather than forcing Agent Control to mimic an arbitrary third-party API.
+
+A future custom Python/TypeScript Runtime would sit behind the same Runtime Contract and is conceptually the same class of implementation.
+
+### Third-party Runtime
+
+Hermes Agent, OpenClaw, OpenAI-compatible Agent products and other third-party Runtimes are explicitly **post-MVP**.
+
+They may later require stronger Adapter translation or explicit degradation, but their current API limitations must not drive the MVP contract design. The security invariants for such future integrations remain recorded in `runtime-trust-authority.md`.
+
+## LifeSpace boundary
+
+LifeSpace has two separate roles relative to ALOHA and they must not be conflated.
+
+### LifeSpace Identity -> Agent Control
+
+LifeSpace Identity is a foundational dependency of ALOHA Agent Control because ALOHA needs a trusted answer to “who is this user / what application and Agent are acting?” before it can build an authoritative Run context.
+
+ALOHA does not create a second Identity / Space / Grant / Delegation authorization system.
+
+### LifeSpace Core -> Runtime Tool
+
+LifeSpace Core is an independent Shared Reality（共享现实）and domain capability provider.
+
+Task/Event/model/action access should normally be exposed as an appropriate Runtime Tool / MCP / adapter capability. The Runtime calls that capability, and LifeSpace performs its own final current-state authorization.
+
+Therefore:
+
+- LifeSpace **Identity** is an Agent Control dependency;
+- LifeSpace **Core** is a high-value Tool provider;
+- using LifeSpace Identity does not require Agent Control to proxy all LifeSpace Core operations.
+
+This also means the ALOHA MVP architecture itself can exist with non-LifeSpace Tools. LifeSpace Core is prioritized because of product value and because it is a major source of the user's shared reality, not because the Runtime Contract depends on LifeSpace Core.
+
+## Context（上下文）
+
+ALOHA keeps Context as structured product input rather than one unstructured prompt string, but the MVP should remain incremental.
+
+Examples of future/ongoing Context include:
+
+- time / timezone / locale;
+- location;
+- device/client state;
+- current Surface / selected content;
+- images/files/resources.
+
+Only add fields when a real interaction requires them. Preserve source/freshness/consent where they matter, but do not build a generic Context framework before those cases exist.
+
+Client-provided Context is never authorization authority.
+
+## Capability and Tool boundary
+
+Two concepts remain separate:
+
+- **ALOHA-managed Capability（ALOHA 管理能力）** — a capability ALOHA itself exposes through an ALOHA-controlled invocation path, such as M2 `math.calculate`.
+- **Runtime Tool（运行时工具）** — a Tool configured for the Runtime, such as a LifeSpace Tool, an n8n workflow Tool or another integration.
+
+M2 proves the first category and does not imply that every future Tool must be proxied by Agent Control.
+
+Business/domain semantics remain with their owning providers. ALOHA should not copy LifeSpace Task/Event semantics, HomeMew domain behavior or other provider logic into Agent Control.
+
+## Confirmation（确认）
+
+Confirmation is an ALOHA product behavior, not LifeSpace domain authorization.
+
+Do not build a generic approval engine in advance. When the first real mutating/high-impact action needs user approval, implement the minimum Confirmation flow required for that concrete action and bind it to the relevant Run/action parameters.
+
+If a future Runtime cannot reliably preserve a mandatory Confirmation rule, use an ALOHA-controlled execution path for that sensitive action rather than weakening the product rule. This is a future integration constraint, not a reason to complicate the current n8n MVP.
 
 ## Repository responsibilities
 
 ### `apps/web`
 
-Owns the ALOHA first-party user experience: input, personalized interaction ergonomics, presentation, local PWA concerns and client-side context collection with appropriate user consent.
-
-It does not own authorization authority or external-domain business data. In the current production deployment, its build output is attached to the Gateway Worker as Static Assets; this is a deployment choice, not a transfer of UI ownership to Gateway code.
+First-party ALOHA product UI and client-side interaction/context collection.
 
 ### `workers/gateway`
 
-Owns the external transport/channel boundary: request admission, authentication handoff, channel adaptation, protocol normalization, streaming/session transport, routing and transport-level controls.
-
-It does not own Agent reasoning, Capability policy or confirmation policy. Serving the PWA build as Worker Static Assets does not move product UI logic into Gateway runtime code.
+External channel/transport boundary and first-party web asset serving for the current deployment.
 
 ### `workers/agent-control`
 
-Owns ALOHA Agent Control: verified identity/authorization context consumption, Context Envelope policy, ALOHA-managed Capability exposure, confirmation policy, Conversation/Run product semantics, Runtime selection and runtime-event normalization.
-
-For MVP it selects the n8n Agent backend and invokes it only through the n8n Runtime Adapter. It is not a generic Agent Runtime engine and does not claim control over independent Runtime-native authority.
+Conversation / Run control, trusted identity/context assembly, Canonical Run Envelope production, Runtime selection and canonical event normalization.
 
 ### `packages/contracts`
 
-Owns shared ALOHA interaction/context/run/capability/runtime-facing types. Contracts should remain provider/runtime neutral unless a dependency is deliberately part of the boundary.
+ALOHA Interaction / Run / Context / Runtime-facing contracts. Canonical Run Envelope v1 belongs here when implemented.
+
+### `packages/runtime-n8n`
+
+Concrete mapping between the ALOHA Runtime Contract and the controlled n8n Agent workflow.
 
 ### `packages/capabilities`
 
-Owns ALOHA-side Capability registry/adapters. It may adapt LifeSpace, HomeMew, n8n and later shared services, but it must not absorb those systems' domain ownership.
-
-### Runtime adapters
-
-The first concrete Runtime Adapter is now selected: **n8n Agent**.
-
-Implementation should give n8n-specific adapter code an explicit owning package/directory and keep provider-specific request/response/session/error mapping there. Do not scatter n8n-specific details across Gateway, client code or generic Agent Control policy.
-
-A Runtime Adapter also owns the concrete **support/degradation mapping** between ALOHA semantics and what that backend can really enforce. Do not claim hard per-Run restriction where only Prompt guidance or a weaker backend feature exists.
-
-Do not introduce a generic adapter framework beyond the abstractions actually needed to express the n8n adapter plus the stable Runtime Contract. When a second backend becomes real, use it to discover which parts genuinely belong in shared adapter infrastructure.
-
-## Outside this repository
-
-- **LifeSpace** — Identity（身份）and Shared Reality（共享现实）.
-- **HomeMew** — family application/domain capability provider; HomeMew Agent remains independent.
-- **Relay** — Delegated Work（委托工作）.
-- **Poina** — long-term Memory（长期记忆）infrastructure.
-- **Facet** — generative human-Agent interaction runtime.
-- **知了** — unified notification infrastructure.
-- **n8n** — external workflow/runtime platform and the selected MVP Primary Runtime Backend; it may simultaneously host independent Workflow Capabilities.
-- future external Runtime Backend products such as Hermes Agent and OpenClaw.
+ALOHA-managed capability registry/adapters. Do not use this package as a generic registry for all Runtime-native Tools.
 
 ## MVP implementation order
 
-1. Keep the PWA shell fast and minimal.
-2. Stabilize the first-party Interaction Protocol and Context Envelope needed by the MVP.
-3. Wire `web -> gateway -> agent-control` with progressive/streaming-friendly contracts.
-4. Define the smallest Runtime Contract required by the selected n8n Agent workflow.
-5. Implement the n8n Runtime Adapter and run one real ALOHA Run through the n8n Agent workflow.
-6. Add one direct capability exposed to that Agent. **M2 source implemented; deployed capability verification remains the current gate.**
-7. Add one **separate** n8n workflow capability to prove the Runtime/Capability roles can coexist cleanly.
-8. Add one authorized LifeSpace / HomeMew read-write scenario.
-9. Normalize the real n8n execution states/results into the ALOHA first-party Run/Stream event model.
-10. Only then expand richer context, voice, memory, delegation, generative interaction or evaluate a second Runtime Backend.
+1. **M0/M1 — complete:** first text Interaction Protocol path and n8n Agent Runtime bootstrap.
+2. **M2 — close current deployment gate:** verify `math.calculate` end to end and stop; M2 proves only the ALOHA-managed capability invocation path.
+3. **M3 — Canonical Run Envelope + state + Identity:**
+   - implement the Conversation / Run persistence required by `conversation-run-lifecycle.md`;
+   - bind LifeSpace Identity into Agent Control;
+   - stabilize Canonical Run Envelope v1;
+   - adapt the controlled n8n Agent workflow to consume it;
+   - keep the contract small and based only on current needs.
+4. **M4 — real Tools:** attach useful Tool providers to the Runtime. Prefer one representative LifeSpace Core scenario because it provides high personal-assistant value. Add an n8n Workflow Tool when there is a useful workflow; do not create a special architectural milestone merely to prove n8n's second role.
+5. **M5 — first Confirmation-required action:** add the minimum Confirmation behavior only when the first real mutating/high-impact Tool scenario requires it.
+6. **Client work in parallel:** State-first Current Work Surface, Desktop/Mobile Composer, text/image submission and normalized Run/error/Confirmation presentation.
+7. **MVP closure:** deployed end-to-end acceptance, failure/deny paths, public-repository safety and usability validation.
 
-Do not build a generic Agent Framework merely to make Runtime backends theoretically interchangeable. Keep the stable ALOHA semantic boundary small; n8n Agent is the concrete MVP implementation, while replacement compatibility is preserved by keeping n8n-native semantics behind the Runtime Adapter and allowing explicit degradation when a future backend cannot enforce every ALOHA control semantic equally.
+These are internal implementation phases. Public GitHub Issues should be created only for externally understandable, independently actionable or independently verifiable work.
+
+## Explicit non-goals for MVP
+
+- Hermes Agent or another second Runtime integration;
+- generic Runtime compatibility / feature negotiation framework;
+- generic Runtime sandbox or credential broker;
+- generic Context ontology;
+- generic approval/workflow engine;
+- moving LifeSpace Core semantics into Agent Control;
+- turning n8n-native workflow/session structures into ALOHA product contracts.
