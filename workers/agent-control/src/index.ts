@@ -144,7 +144,7 @@ const verifyCapabilityGrant = async (
   const valid = await crypto.subtle.verify(
     'HMAC',
     key,
-    signature,
+    signature.buffer as ArrayBuffer,
     encoder.encode(payload),
   )
 
