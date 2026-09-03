@@ -50,12 +50,12 @@ export interface RunAdmissionResult {
   supersededRunId?: string
 }
 
-interface StateTransaction {
+export interface StateTransaction {
   get<T>(key: string): Promise<T | undefined>
   put<T>(key: string, value: T): Promise<void>
 }
 
-interface StateStorage extends StateTransaction {
+export interface StateStorage extends StateTransaction {
   transaction<T>(
     closure: (transaction: StateTransaction) => Promise<T>,
   ): Promise<T>
@@ -68,8 +68,54 @@ const now = () => new Date().toISOString()
 const id = (prefix: string) =>
   `${prefix}_${crypto.randomUUID().replaceAll('-', '')}`
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
 const isActiveStatus = (status: PersistedRunStatus) =>
   status === 'accepted' || status === 'running'
+
+const adaptTransaction = (
+  transaction: DurableObjectTransaction,
+): StateTransaction => ({
+  get: <T>(key: string) => transaction.get<T>(key),
+  put: <T>(key: string, value: T) => transaction.put(key, value),
+})
+
+const adaptStorage = (storage: DurableObjectStorage): StateStorage => ({
+  get: <T>(key: string) => storage.get<T>(key),
+  put: <T>(key: string, value: T) => storage.put(key, value),
+  transaction: <T>(closure: (transaction: StateTransaction) => Promise<T>) =>
+    storage.transaction((transaction) => closure(adaptTransaction(transaction))),
+})
+
+const readAdmission = (value: unknown): RunAdmissionInput | null => {
+  if (!isRecord(value)) {
+    return null
+  }
+
+  if (
+    typeof value.requestId !== 'string' ||
+    (value.conversationId !== undefined &&
+      typeof value.conversationId !== 'string') ||
+    typeof value.principalId !== 'string' ||
+    typeof value.actorId !== 'string' ||
+    typeof value.applicationId !== 'string' ||
+    typeof value.inputText !== 'string'
+  ) {
+    return null
+  }
+
+  return {
+    requestId: value.requestId,
+    ...(typeof value.conversationId === 'string'
+      ? { conversationId: value.conversationId }
+      : {}),
+    principalId: value.principalId,
+    actorId: value.actorId,
+    applicationId: value.applicationId,
+    inputText: value.inputText,
+  }
+}
 
 export class ConversationRunStore {
   constructor(private readonly storage: StateStorage) {}
@@ -276,9 +322,7 @@ export class AlohaUserState extends DurableObject {
 
   constructor(ctx: DurableObjectState, env: unknown) {
     super(ctx, env)
-    this.store = new ConversationRunStore(
-      ctx.storage as unknown as StateStorage,
-    )
+    this.store = new ConversationRunStore(adaptStorage(ctx.storage))
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -295,13 +339,15 @@ export class AlohaUserState extends DurableObject {
 
     try {
       if (request.method === 'POST' && url.pathname === '/admit') {
-        return Response.json(
-          await this.store.admit(body as RunAdmissionInput),
-        )
+        const admission = readAdmission(body)
+        if (!admission) {
+          return Response.json({ error: 'invalid_admission' }, { status: 400 })
+        }
+        return Response.json(await this.store.admit(admission))
       }
 
       if (request.method === 'POST' && url.pathname === '/running') {
-        const runId = (body as { runId?: unknown })?.runId
+        const runId = isRecord(body) ? body.runId : undefined
         if (typeof runId !== 'string') {
           return Response.json({ error: 'run_id_required' }, { status: 400 })
         }
@@ -310,36 +356,27 @@ export class AlohaUserState extends DurableObject {
       }
 
       if (request.method === 'POST' && url.pathname === '/complete') {
-        const value = body as {
-          runId?: unknown
-          outputText?: unknown
-          backendRunId?: unknown
-        }
+        const runId = isRecord(body) ? body.runId : undefined
+        const outputText = isRecord(body) ? body.outputText : undefined
+        const backendRunId = isRecord(body) ? body.backendRunId : undefined
         if (
-          typeof value?.runId !== 'string' ||
-          typeof value.outputText !== 'string' ||
-          (value.backendRunId !== undefined &&
-            typeof value.backendRunId !== 'string')
+          typeof runId !== 'string' ||
+          typeof outputText !== 'string' ||
+          (backendRunId !== undefined && typeof backendRunId !== 'string')
         ) {
           return Response.json({ error: 'invalid_completion' }, { status: 400 })
         }
-        await this.store.complete(
-          value.runId,
-          value.outputText,
-          value.backendRunId as string | undefined,
-        )
+        await this.store.complete(runId, outputText, backendRunId)
         return Response.json({ ok: true })
       }
 
       if (request.method === 'POST' && url.pathname === '/fail') {
-        const value = body as { runId?: unknown; errorCode?: unknown }
-        if (
-          typeof value?.runId !== 'string' ||
-          typeof value.errorCode !== 'string'
-        ) {
+        const runId = isRecord(body) ? body.runId : undefined
+        const errorCode = isRecord(body) ? body.errorCode : undefined
+        if (typeof runId !== 'string' || typeof errorCode !== 'string') {
           return Response.json({ error: 'invalid_failure' }, { status: 400 })
         }
-        await this.store.fail(value.runId, value.errorCode)
+        await this.store.fail(runId, errorCode)
         return Response.json({ ok: true })
       }
     } catch (error) {
