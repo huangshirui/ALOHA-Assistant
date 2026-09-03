@@ -105,13 +105,13 @@ At the first local dependency install:
 Production deployment is intentionally split from pull-request CI. `.github/workflows/ci.yml` validates pull requests and `main`; `.github/workflows/deploy.yml` runs only after code reaches `main` (or by explicit manual dispatch), repeats `npm run check`, builds the Web/PWA static assets, and deploys in dependency order:
 
 1. Agent Control Worker;
-2. Gateway Worker together with the built Web/PWA Static Assets（静态资源）.
+2. ALOHA Edge Worker (`aloha-edge`) containing the thin Gateway runtime together with the built Web/PWA Static Assets（静态资源）.
 
 The resulting MVP production topology is intentionally small:
 
 ```text
 Browser / n8n capability call
-  -> aloha-gateway Worker
+  -> aloha-edge Worker
        |- Web/PWA Static Assets
        |- /v1/* Gateway API
        `- AGENT_CONTROL Service Binding
@@ -119,6 +119,8 @@ Browser / n8n capability call
                  |- n8n Agent Runtime
                  `- ALOHA Direct Capability execution
 ```
+
+`aloha-edge` is the name of the physical public Cloudflare deployment unit, not a replacement for the logical Gateway（网关）component. Gateway remains the transport/channel boundary implemented under `workers/gateway`; the Edge deployment additionally carries the compiled first-party Web/PWA assets so they can share one origin.
 
 Cloudflare Pages is not part of this deployment. The Web/PWA and Gateway therefore share one origin, so production does not require a Pages project name or a browser-side Gateway origin variable.
 
