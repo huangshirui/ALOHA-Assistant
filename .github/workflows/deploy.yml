@@ -29,10 +29,10 @@ jobs:
       - name: Use repository npm version
         run: npm install --global npm@10.9.2
 
-      # The repository intentionally has no lockfile yet; switch this to npm ci
-      # when package-lock.json is committed, matching ci.yml.
+      # The repository has no lockfile yet. --legacy-peer-deps avoids the current
+      # npm Arborist peer-set crash; remove it when switching to npm ci.
       - name: Install dependencies
-        run: npm install
+        run: npm install --legacy-peer-deps
 
       - name: Verify repository
         run: npm run check
