@@ -1,4 +1,7 @@
-import type { InteractionAttachment } from './interaction'
+import type {
+  CapabilityJsonSchema,
+  InteractionAttachment,
+} from './index'
 
 export interface RuntimeRunRequest {
   requestId: string
@@ -12,8 +15,18 @@ export interface RuntimeRunRequest {
 }
 
 export interface RuntimeCapabilityDescriptor {
+  id: string
   name: string
   description: string
+  inputSchema: CapabilityJsonSchema
+  invocation: RuntimeCapabilityInvocation
+}
+
+export interface RuntimeCapabilityInvocation {
+  type: 'http'
+  method: 'POST'
+  url: string
+  authorization: string
 }
 
 export interface RuntimeRunResult {
