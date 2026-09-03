@@ -45,6 +45,8 @@ First-party PWA / future clients       WeCom / Feishu / future channels
 
 The diagram shows logical boundaries, not mandatory deployment topology. Gateway and Agent Control may initially run on the same infrastructure. For the MVP first vertical slice, **n8n Agent is the selected Primary Runtime Backend（主运行时后端）**. The Runtime Contract / Adapter boundary remains stable so another backend can replace n8n later without redefining ALOHA product semantics.
 
+For the current Cloudflare MVP deployment, the first-party Web/PWA is served as Static Assets（静态资源） by the public Gateway Worker. Agent Control is deployed as a separate internal-only Worker reached through a Service Binding（服务绑定）. This physical split preserves one public ALOHA origin without changing the logical architecture above.
+
 ## MVP Runtime decision
 
 The MVP Runtime selection is **frozen to n8n Agent** for the first end-to-end implementation.
@@ -173,13 +175,13 @@ These roles must remain explicit and must not be conflated. A workflow hosting t
 
 Owns the ALOHA first-party user experience: input, personalized interaction ergonomics, presentation, local PWA concerns and client-side context collection with appropriate user consent.
 
-It does not own authorization authority or external-domain business data.
+It does not own authorization authority or external-domain business data. In the current production deployment, its build output is attached to the Gateway Worker as Static Assets; this is a deployment choice, not a transfer of UI ownership to Gateway code.
 
 ### `workers/gateway`
 
 Owns the external transport/channel boundary: request admission, authentication handoff, channel adaptation, protocol normalization, streaming/session transport, routing and transport-level controls.
 
-It does not own Agent reasoning, Capability policy or confirmation policy.
+It does not own Agent reasoning, Capability policy or confirmation policy. Serving the PWA build as Worker Static Assets does not move product UI logic into Gateway runtime code.
 
 ### `workers/agent-control`
 
