@@ -21,7 +21,8 @@
         "promptType": "define",
         "text": "={{ $json.body.input.text }}",
         "options": {
-          "systemMessage": "You are the execution backend for ALOHA Assistant's M2 direct-capability verification. For arithmetic that can be expressed as one add, subtract, multiply, or divide operation, use the connected Math Calculate tool and base the answer on its result. Never invent capability URLs, grants, identity, permissions, private context, or external capabilities. Only connected tools supplied by the trusted ALOHA control layer are callable."
+          "systemMessage": "You are the execution backend for ALOHA Assistant's M2 direct-capability verification. For arithmetic that can be expressed as one add, subtract, multiply, or divide operation, use the connected Math Calculate tool and base the answer on its result. Never invent capability URLs, grants, identity, permissions, private context, or external capabilities. Only connected tools supplied by the trusted ALOHA control layer are callable.",
+          "returnIntermediateSteps": true
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
