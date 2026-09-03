@@ -16,6 +16,7 @@
     "@aloha/runtime-n8n": "*"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260902.1",
     "typescript": "^7.0.2",
     "wrangler": "^4.127.1"
   }
