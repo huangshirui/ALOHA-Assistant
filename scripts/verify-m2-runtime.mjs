@@ -103,12 +103,13 @@ const verifyRuntimeToolPath = async () => {
   const marker = 'M2_TOOL_OK:'
   const text = [
     'This is an ALOHA M2 deployment verification request.',
-    'If a tool named Math Calculate is available, you MUST use that tool to multiply the two numbers below and then reply with exactly one line in this format:',
+    'Use the connected ALOHA-authorized arithmetic tool that performs one add, subtract, multiply, or divide operation. Its UI/node name may be normalized by the runtime (for example spaces may become underscores).',
+    'You MUST use that connected arithmetic tool to multiply the two numbers below and then reply with exactly one line in this format:',
     `${marker}<numeric result>`,
     'Do not add words, markdown, commas, or explanation.',
     `left=${left}`,
     `right=${right}`,
-    'If Math Calculate is not available, reply exactly: M2_TOOL_MISSING',
+    'If no connected arithmetic tool is available at all, reply exactly: M2_TOOL_MISSING',
   ].join('\n')
 
   const response = await fetch(`${gatewayUrl}/v1/interactions`, {
@@ -137,7 +138,7 @@ const verifyRuntimeToolPath = async () => {
 
   if (output === 'M2_TOOL_MISSING') {
     throw new Error(
-      'M2 runtime verification failed: deployed n8n workflow does not expose Math Calculate.',
+      'M2 runtime verification failed: deployed n8n workflow did not advertise an authorized arithmetic tool to the Agent.',
     )
   }
 
@@ -151,12 +152,12 @@ const verifyRuntimeToolPath = async () => {
 
   if (actual !== expected) {
     throw new Error(
-      `M2 runtime verification failed: expected Math Calculate result ${expected}, received ${actual || '<empty>'}.`,
+      `M2 runtime verification failed: expected authorized arithmetic result ${expected}, received ${actual || '<empty>'}.`,
     )
   }
 
   console.log(`Events: ${eventTypes.join(' -> ')}`)
-  console.log('Math Calculate runtime path: M2 marker and exact numeric result verified.')
+  console.log('Authorized arithmetic runtime path: M2 marker and exact numeric result verified.')
 }
 
 try {
