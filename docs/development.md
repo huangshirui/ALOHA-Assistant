@@ -22,7 +22,7 @@ npm run dev:gateway
 npm run dev:agent-control
 ```
 
-The Web app calls the Gateway only. During local Vite development, `/v1` is proxied to `http://127.0.0.1:8787`. A separately deployed Web app may set `VITE_GATEWAY_URL` to the public Gateway origin; this browser-visible value is routing configuration, not a trusted credential.
+The Web app calls the Gateway only. During local Vite development, `/v1` is proxied to `http://127.0.0.1:8787`. `VITE_GATEWAY_URL` remains available for separately hosted Web variants, but the current production deployment serves the Web/PWA and Gateway API from the same Worker origin and does not require it.
 
 The Gateway uses an `AGENT_CONTROL` Service Binding（服务绑定） to reach the Agent Control worker.
 
@@ -88,10 +88,73 @@ At the first local dependency install:
 - Add `.env.example` / `.dev.vars.example` only with synthetic placeholders when local setup needs one.
 - Keep staging and production Worker bindings/resources separate.
 - Browser code must never receive trusted service/application credentials.
-- `VITE_GATEWAY_URL` may be browser-visible because it is only the Gateway route; it must never carry credentials or delegated authority.
+- `VITE_GATEWAY_URL` may be browser-visible when a separately hosted Web variant needs it because it is only a Gateway route; it must never carry credentials or delegated authority.
 - Runtime Backend credentials and endpoints must be injected as deployment configuration and must not leak into public examples or documentation.
 - `N8N_AGENT_WEBHOOK_URL` is deployment-only runtime configuration even if the endpoint itself is not a credential.
 - `N8N_AGENT_AUTH_TOKEN` is a secret and must use the deployment platform's secret mechanism.
+
+## Cloudflare production deployment
+
+Production deployment is intentionally split from pull-request CI. `.github/workflows/ci.yml` validates pull requests and `main`; `.github/workflows/deploy.yml` runs only after code reaches `main` (or by explicit manual dispatch), repeats `npm run check`, builds the Web/PWA static assets, and deploys in dependency order:
+
+1. Agent Control Worker;
+2. Gateway Worker together with the built Web/PWA Static Assets（静态资源）.
+
+The resulting MVP production topology is intentionally small:
+
+```text
+Browser
+  -> aloha-gateway Worker
+       |- Web/PWA Static Assets
+       |- /v1/* Gateway API
+       `- AGENT_CONTROL Service Binding
+            -> aloha-agent-control Worker (internal only)
+                 -> n8n Agent Runtime
+```
+
+Cloudflare Pages is not part of this deployment. The Web/PWA and Gateway therefore share one origin, so production does not require a Pages project name or a browser-side Gateway origin variable.
+
+### GitHub repository deployment secrets
+
+For the current single-production-environment MVP, keep both Cloudflare deployment values under **Settings -> Secrets and variables -> Actions -> Repository secrets**:
+
+- `CLOUDFLARE_API_TOKEN` — one dedicated, least-privilege Cloudflare API token for this repository. Do not use a Global API Key.
+- `CLOUDFLARE_ACCOUNT_ID` — the target Cloudflare account ID. It is not itself an authentication credential, but storing it beside the deployment token keeps the initial setup simple and still prevents live infrastructure identifiers from being committed to the public repository.
+
+This does **not** require two Cloudflare API tokens. A GitHub Environment would only change the GitHub-side scope/protection rules for the same stored token; it is optional and can be introduced later when staging/production separation or deployment approvals become useful.
+
+Because the workflow has no `pull_request` deployment trigger, fork/PR code cannot invoke production deployment with repository deployment secrets.
+
+With the current Worker-only topology, the deployment token does not need Cloudflare Pages permissions.
+
+### Cloudflare runtime secrets and bootstrap
+
+The n8n endpoint and bearer token belong to the Agent Control Worker, not GitHub source configuration. Configure them as Cloudflare Worker Secrets after the first Worker deployment exists:
+
+- `N8N_AGENT_WEBHOOK_URL`
+- `N8N_AGENT_AUTH_TOKEN`
+
+The first infrastructure deployment intentionally does **not** declare these as Wrangler `secrets.required`. This avoids a bootstrap deadlock where a not-yet-created Worker cannot already contain the secrets required for its own first deployment. The application already treats an unconfigured Runtime as an explicit state: without `N8N_AGENT_WEBHOOK_URL`, Agent Control returns `runtime_backend_not_configured` rather than attempting a Runtime call.
+
+After the first Agent Control Worker exists, add both values through Cloudflare Worker Secrets and run the M1 real-runtime verification. Once the runtime bootstrap is confirmed, `secrets.required` may be reintroduced as a hard deployment invariant so future deploys fail if required runtime bindings are removed.
+
+Secret values are never placed in GitHub workflow YAML, Wrangler config, Actions logs or repository documentation.
+
+Agent Control also sets `workers_dev: false` and `preview_urls: false`, so it has no direct public `workers.dev` or preview endpoint. Gateway reaches it through the `AGENT_CONTROL` Service Binding.
+
+### Web/Gateway same-origin deployment
+
+`workers/gateway/wrangler.jsonc` attaches `apps/web/dist` as Worker Static Assets and uses SPA fallback behavior. API and health paths are configured to run the Gateway Worker first; normal Web assets are served directly by Cloudflare's asset layer.
+
+This keeps the logical architecture unchanged while reducing the physical MVP deployment to two Workers and one public entry point.
+
+### Deployment safety rule
+
+Production deployment follows this boundary:
+
+`public source + public deployment definition + private deployment identity + private runtime secrets`
+
+Do not add `pull_request_target`, checkout untrusted pull-request code in a privileged deployment job, echo deployment secrets, or move n8n runtime credentials into browser-visible build variables.
 
 ## Definition of done for scaffold-level changes
 

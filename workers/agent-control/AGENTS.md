@@ -2,6 +2,8 @@
 
 `workers/agent-control` is the ALOHA-specific Agent Control（智能体控制层）service. It owns ALOHA product semantics around an Agent run; it is **not** a generic Agent Runtime / framework and does not require ALOHA to implement its own model/tool loop.
 
+In the current Cloudflare MVP deployment, Agent Control is an internal-only Worker with no public `workers.dev` or preview URL. Gateway reaches it through a Service Binding（服务绑定）. Runtime backend secrets are configured on this Worker after its first infrastructure deployment; until configured, the explicit `runtime_backend_not_configured` state remains valid and must not be presented as a working n8n integration.
+
 ## Rules
 
 - Own verified Identity / Principal context, authorization context, Context Envelope assembly/policy, Capability exposure policy, confirmation policy, Conversation / Run product semantics, Runtime selection and canonical event normalization.
@@ -14,3 +16,4 @@
 - Normalize backend-native output into ALOHA canonical Run / Stream Events for clients and channels.
 - Do not persist durable Shared Reality, long-term memory or delegated-work infrastructure locally when those responsibilities belong to LifeSpace, Poina or Relay.
 - A Runtime backend may also call n8n as a Capability; separately, an n8n Agent workflow may itself be selected as a Runtime backend. Keep those two roles explicit.
+- Do not treat successful Worker deployment as proof that the n8n Runtime is configured or verified; M1 remains gated on a real end-to-end Runtime run.

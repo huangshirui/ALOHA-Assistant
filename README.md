@@ -66,6 +66,8 @@ LifeSpace / HomeMew / n8n workflows / Poina / Relay / ...
 
 The Gateway and Agent Control may initially be deployed on the same platform, but they remain separate logical responsibilities. n8n is the MVP Primary Runtime Backend, while the Runtime Contract / Adapter boundary remains intentionally replaceable.
 
+For the current Cloudflare MVP deployment, the Web/PWA is served as Static Assets（静态资源） from the public Gateway Worker. Agent Control remains a separate internal-only Worker reached through a Service Binding（服务绑定）. This keeps one public ALOHA origin while preserving the logical Gateway / Agent Control boundary.
+
 ## Protocol direction
 
 ### Client / channel -> ALOHA
@@ -122,7 +124,7 @@ Current sources of truth:
 apps/
   web/                  # Vue 3 + Vite PWA
 workers/
-  gateway/              # thin channel / transport boundary
+  gateway/              # thin channel / transport boundary + production Web static assets
   agent-control/        # ALOHA product control layer; not a generic Agent Runtime
 packages/
   contracts/            # interaction / context / run / runtime-facing contracts
@@ -173,4 +175,4 @@ npm run check
 
 ## Status
 
-The repository skeleton and the **first text interaction slice are implemented in source**: PWA -> Gateway -> Agent Control -> n8n Runtime Adapter, with ALOHA canonical SSE events returned to the PWA. Automated checks cover the adapter and Agent Control normalization path. A real deployed n8n Agent execution is **not yet claimed as verified** until deployment-only runtime configuration is supplied and the integration check passes. Capability execution, trusted Identity / Authorization Context, confirmation, durable Conversation / Run lifecycle, voice and resources remain later slices.
+The repository skeleton and the **first text interaction slice are implemented in source**: PWA -> Gateway -> Agent Control -> n8n Runtime Adapter, with ALOHA canonical SSE events returned to the PWA. Automated checks cover the adapter and Agent Control normalization path. The Cloudflare deployment definition now keeps the PWA and Gateway on one public Worker origin and Agent Control on an internal-only Worker. A real deployed n8n Agent execution is **not yet claimed as verified** until deployment-only runtime configuration is supplied and the integration check passes. Capability execution, trusted Identity / Authorization Context, confirmation, durable Conversation / Run lifecycle, voice and resources remain later slices.
