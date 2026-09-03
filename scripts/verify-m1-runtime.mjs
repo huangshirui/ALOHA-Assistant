@@ -1,4 +1,6 @@
 const gatewayUrl = (process.env.ALOHA_GATEWAY_URL ?? '').replace(/\/$/, '')
+const accessCookie = (process.env.CF_ACCESS_AUTHORIZATION_COOKIE ?? '').trim()
+const accessAssertion = (process.env.CF_ACCESS_JWT_ASSERTION ?? '').trim()
 const text =
   process.env.ALOHA_VERIFY_TEXT ??
   'Reply with a short confirmation that the ALOHA M1 runtime path is working.'
@@ -8,17 +10,32 @@ if (!gatewayUrl) {
   process.exit(2)
 }
 
+const requestHeaders = () => {
+  const headers = new Headers({ 'content-type': 'application/json' })
+  if (accessCookie) {
+    headers.set('cookie', `CF_Authorization=${accessCookie}`)
+  } else if (accessAssertion) {
+    headers.set('Cf-Access-Jwt-Assertion', accessAssertion)
+  }
+  return headers
+}
+
 const verifySuccessfulRun = async () => {
   const response = await fetch(`${gatewayUrl}/v1/interactions`, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-    },
+    headers: requestHeaders(),
+    redirect: 'manual',
     body: JSON.stringify({
       requestId: crypto.randomUUID(),
       text,
     }),
   })
+
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(
+      'Cloudflare Access did not authenticate the M1 verifier request; use a current CF_Authorization cookie.',
+    )
+  }
 
   if (!response.ok || !response.body) {
     throw new Error(`Interaction request failed with HTTP ${response.status}.`)
@@ -96,11 +113,16 @@ const verifySuccessfulRun = async () => {
 const verifySafeFailure = async () => {
   const response = await fetch(`${gatewayUrl}/v1/interactions`, {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-    },
+    headers: requestHeaders(),
+    redirect: 'manual',
     body: '{',
   })
+
+  if (response.status >= 300 && response.status < 400) {
+    throw new Error(
+      'Cloudflare Access did not authenticate the M1 safe-failure verifier request.',
+    )
+  }
 
   const body = await response.text()
   let payload
