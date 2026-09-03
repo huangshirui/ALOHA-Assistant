@@ -61,6 +61,8 @@ export interface StateStorage extends StateTransaction {
   ): Promise<T>
 }
 
+interface AlohaUserStateEnv {}
+
 const conversationKey = (conversationId: string) =>
   `conversation:${conversationId}`
 const runKey = (runId: string) => `run:${runId}`
@@ -317,10 +319,10 @@ export class ConversationRunStateError extends Error {
   }
 }
 
-export class AlohaUserState extends DurableObject {
+export class AlohaUserState extends DurableObject<AlohaUserStateEnv> {
   private readonly store: ConversationRunStore
 
-  constructor(ctx: DurableObjectState, env: unknown) {
+  constructor(ctx: DurableObjectState, env: AlohaUserStateEnv) {
     super(ctx, env)
     this.store = new ConversationRunStore(adaptStorage(ctx.storage))
   }
