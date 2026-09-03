@@ -8,7 +8,8 @@
     "@aloha/contracts": "*"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
     "typescript": "^7.0.2"

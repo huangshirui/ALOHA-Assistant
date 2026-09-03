@@ -112,10 +112,12 @@ Current sources of truth:
 - `README.md` — product boundary and MVP target
 - `docs/architecture.md` — current architecture and repository boundaries
 - `docs/interaction-protocol.md` — first-party Interaction Protocol slice implemented by Web / Gateway / Agent Control
+- `docs/n8n-runtime.md` — M1 n8n Runtime bootstrap/deployment contract
+- `docs/direct-capability.md` — M2 first Direct Capability, capability-grant and deployment boundary
 - `docs/pwa-interaction.md` — current PWA interaction/product baseline
 - `docs/composer-state-machine.md` — Composer states, guards, invariants and implementation/test baseline
 - `docs/conversation-run-lifecycle.md` — Conversation / Run lifecycle and background execution management
-- `docs/development.md` — toolchain, runtime configuration, validation and lockfile baseline
+- `docs/development.md` — toolchain, runtime/capability configuration, validation and lockfile baseline
 - `packages/contracts` — shared ALOHA interaction/capability/runtime-facing protocol types
 
 ## Repository layout
@@ -133,6 +135,8 @@ packages/
 docs/
   architecture.md
   interaction-protocol.md
+  n8n-runtime.md
+  direct-capability.md
   pwa-interaction.md
   composer-state-machine.md
   conversation-run-lifecycle.md
@@ -175,4 +179,8 @@ npm run check
 
 ## Status
 
-The repository skeleton and the **first text interaction slice are implemented in source**: PWA -> Gateway -> Agent Control -> n8n Runtime Adapter, with ALOHA canonical SSE events returned to the PWA. Automated checks cover the adapter and Agent Control normalization path. The Cloudflare deployment definition now keeps the PWA and Gateway on one public Worker origin and Agent Control on an internal-only Worker. A real deployed n8n Agent execution is **not yet claimed as verified** until deployment-only runtime configuration is supplied and the integration check passes. Capability execution, trusted Identity / Authorization Context, confirmation, durable Conversation / Run lifecycle, voice and resources remain later slices.
+M0/M1 have established the text Interaction path and the real n8n Agent Runtime path before entering M2: PWA -> Gateway -> Agent Control -> n8n Runtime Adapter -> n8n Agent -> normalized ALOHA SSE events.
+
+M2 now adds the first real Direct Capability（直接能力） in source: `math.calculate`. Agent Control owns capability exposure and issues a short-lived Run-scoped Capability Grant; n8n receives only the admitted capability descriptor and calls it through the public Gateway back to internal Agent Control. Automated tests cover registration, calculation, fail-closed exposure, grant verification, invalid input and Gateway routing.
+
+A deployed M2 capability path is **not claimed as verified** until the deployment-only `CAPABILITY_GRANT_SIGNING_KEY` is configured, the M2 n8n workflow is published, and the acceptance check in `docs/direct-capability.md` confirms that n8n actually invoked `Math Calculate`. Trusted LifeSpace Identity / Authorization Context, confirmation, mutating capabilities, a separate n8n Workflow Capability, durable Conversation / Run lifecycle, voice and resources remain later slices.
