@@ -9,6 +9,10 @@ interface Env {
 const json = (value: unknown, status = 200) =>
   Response.json(value, { status })
 
+const isRuntimeCapabilityInvocation = (request: Request, pathname: string) =>
+  request.method === 'POST' &&
+  /^\/v1\/runtime\/capabilities\/[^/]+\/invoke$/u.test(pathname)
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -17,7 +21,10 @@ export default {
       return json({ service: 'aloha-gateway', ok: true })
     }
 
-    if (url.pathname === '/v1/interactions' && request.method === 'POST') {
+    if (
+      (url.pathname === '/v1/interactions' && request.method === 'POST') ||
+      isRuntimeCapabilityInvocation(request, url.pathname)
+    ) {
       if (!env.AGENT_CONTROL) {
         return json({ error: 'agent_control_binding_not_configured' }, 503)
       }
