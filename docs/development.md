@@ -22,7 +22,7 @@ npm run dev:gateway
 npm run dev:agent-control
 ```
 
-The Web app calls the Gateway only. During local Vite development, `/v1` is proxied to `http://127.0.0.1:8787`. A separately deployed Web app may set `VITE_GATEWAY_URL` to the public Gateway origin; this browser-visible value is routing configuration, not a trusted credential.
+The Web app calls the Gateway only. During local Vite development, `/v1` is proxied to `http://127.0.0.1:8787`. `VITE_GATEWAY_URL` remains available for separately hosted Web variants, but the current production deployment serves the Web/PWA and Gateway API from the same Worker origin and does not require it.
 
 The Gateway uses an `AGENT_CONTROL` Service Binding（服务绑定） to reach the Agent Control worker.
 
@@ -88,31 +88,44 @@ At the first local dependency install:
 - Add `.env.example` / `.dev.vars.example` only with synthetic placeholders when local setup needs one.
 - Keep staging and production Worker bindings/resources separate.
 - Browser code must never receive trusted service/application credentials.
-- `VITE_GATEWAY_URL` may be browser-visible because it is only the Gateway route; it must never carry credentials or delegated authority.
+- `VITE_GATEWAY_URL` may be browser-visible when a separately hosted Web variant needs it because it is only a Gateway route; it must never carry credentials or delegated authority.
 - Runtime Backend credentials and endpoints must be injected as deployment configuration and must not leak into public examples or documentation.
 - `N8N_AGENT_WEBHOOK_URL` is deployment-only runtime configuration even if the endpoint itself is not a credential.
 - `N8N_AGENT_AUTH_TOKEN` is a secret and must use the deployment platform's secret mechanism.
 
 ## Cloudflare production deployment
 
-Production deployment is intentionally split from pull-request CI. `.github/workflows/ci.yml` validates pull requests and `main`; `.github/workflows/deploy.yml` runs only after code reaches `main` (or by explicit manual dispatch), repeats `npm run check`, and then deploys in dependency order:
+Production deployment is intentionally split from pull-request CI. `.github/workflows/ci.yml` validates pull requests and `main`; `.github/workflows/deploy.yml` runs only after code reaches `main` (or by explicit manual dispatch), repeats `npm run check`, builds the Web/PWA static assets, and deploys in dependency order:
 
 1. Agent Control Worker;
-2. Gateway Worker;
-3. Web/PWA to Cloudflare Pages.
+2. Gateway Worker together with the built Web/PWA Static Assets（静态资源）.
 
-The public workflow contains only portable deployment logic. Live deployment identity, account/resource identifiers and runtime configuration remain outside source control.
+The resulting MVP production topology is intentionally small:
 
-### GitHub production environment
+```text
+Browser
+  -> aloha-gateway Worker
+       |- Web/PWA Static Assets
+       |- /v1/* Gateway API
+       `- AGENT_CONTROL Service Binding
+            -> aloha-agent-control Worker (internal only)
+                 -> n8n Agent Runtime
+```
 
-Create a GitHub Actions Environment（环境） named `production`. Configure these deployment-only values there or at repository Actions scope without committing their values:
+Cloudflare Pages is not part of this deployment. The Web/PWA and Gateway therefore share one origin, so production does not require a Pages project name or a browser-side Gateway origin variable.
 
-- Secret `CLOUDFLARE_API_TOKEN` — a dedicated, least-privilege Cloudflare API token scoped to the account and only the Worker/Pages permissions required for this repository. Do not use a Global API Key.
-- Secret `CLOUDFLARE_ACCOUNT_ID` — kept outside the public repository even though it is not itself an authentication secret.
-- Secret `CLOUDFLARE_PAGES_PROJECT_NAME` — the existing Cloudflare Pages project used by the ALOHA Web deployment.
-- Variable `ALOHA_GATEWAY_URL` — the browser-visible production Gateway origin used to compile `VITE_GATEWAY_URL`. It contains no credential or delegated authority.
+### GitHub repository deployment secrets
 
-The deployment workflow deliberately has no `pull_request` trigger, so fork/PR code cannot invoke production deployment with deployment credentials.
+For the current single-production-environment MVP, keep both Cloudflare deployment values under **Settings -> Secrets and variables -> Actions -> Repository secrets**:
+
+- `CLOUDFLARE_API_TOKEN` — one dedicated, least-privilege Cloudflare API token for this repository. Do not use a Global API Key.
+- `CLOUDFLARE_ACCOUNT_ID` — the target Cloudflare account ID. It is not itself an authentication credential, but storing it beside the deployment token keeps the initial setup simple and still prevents live infrastructure identifiers from being committed to the public repository.
+
+This does **not** require two Cloudflare API tokens. A GitHub Environment would only change the GitHub-side scope/protection rules for the same stored token; it is optional and can be introduced later when staging/production separation or deployment approvals become useful.
+
+Because the workflow has no `pull_request` deployment trigger, fork/PR code cannot invoke production deployment with repository deployment secrets.
+
+With the current Worker-only topology, the deployment token does not need Cloudflare Pages permissions.
 
 ### Cloudflare runtime secrets
 
@@ -123,11 +136,13 @@ The n8n endpoint and bearer token belong to the Agent Control Worker, not GitHub
 
 `workers/agent-control/wrangler.jsonc` declares both names as required for the current M1 Header-Auth runtime bootstrap. Wrangler validates that the secrets already exist on the deployed Worker before a production deploy succeeds. Values are never placed in GitHub workflow YAML, Wrangler config, Actions logs or repository documentation.
 
-### Web deployment mode
+Agent Control also sets `workers_dev: false` and `preview_urls: false`, so it has no direct public `workers.dev` or preview endpoint. Gateway reaches it through the `AGENT_CONTROL` Service Binding.
 
-The Actions-managed Web deployment uses Cloudflare Pages **Direct Upload** through Wrangler. The Pages project must therefore be compatible with Direct Upload. Do not accidentally create a Git-integrated Pages project and then expect it to behave as a Direct Upload project; Cloudflare treats these as distinct project modes.
+### Web/Gateway same-origin deployment
 
-The workflow builds the Web app with `VITE_GATEWAY_URL` derived from the external `ALOHA_GATEWAY_URL` GitHub variable, then uploads `apps/web/dist` to the configured Pages project. No trusted credential is embedded in browser code.
+`workers/gateway/wrangler.jsonc` attaches `apps/web/dist` as Worker Static Assets and uses SPA fallback behavior. API and health paths are configured to run the Gateway Worker first; normal Web assets are served directly by Cloudflare's asset layer.
+
+This keeps the logical architecture unchanged while reducing the physical MVP deployment to two Workers and one public entry point.
 
 ### Deployment safety rule
 
