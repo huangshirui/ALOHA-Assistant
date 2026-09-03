@@ -253,15 +253,17 @@ Do not introduce a generic adapter framework beyond the abstractions actually ne
 
 ## MVP implementation order
 
-1. Keep the PWA shell fast and minimal.
-2. Stabilize the first-party Interaction Protocol and Context Envelope needed by the MVP.
-3. Wire `web -> gateway -> agent-control` with progressive/streaming-friendly contracts.
-4. Define the smallest Runtime Contract required by the selected n8n Agent workflow.
-5. Implement the n8n Runtime Adapter and run one real ALOHA Run through the n8n Agent workflow.
-6. Add one direct capability exposed to that Agent. **M2 source implemented; deployed capability verification remains the current gate.**
-7. Add one **separate** n8n workflow capability to prove the Runtime/Capability roles can coexist cleanly.
-8. Add one authorized LifeSpace / HomeMew read-write scenario.
-9. Normalize the real n8n execution states/results into the ALOHA first-party Run/Stream event model.
-10. Only then expand richer context, voice, memory, delegation, generative interaction or evaluate a second Runtime Backend.
+The MVP critical path is intentionally ordered by **real personal-assistant value and authority risk**, not by proving every infrastructure combination as early as possible.
+
+1. Keep the PWA shell fast and minimal, stabilize only the first-party Interaction Protocol / Context semantics needed by the active slice, and keep `web -> gateway -> agent-control` working end to end.
+2. Keep the selected n8n Agent Runtime path stable behind the smallest n8n Runtime Adapter. M0/M1 already prove the text/runtime bootstrap; no second Runtime or generic multi-runtime framework is required.
+3. **M2 closure — Direct Capability invocation path.** Complete deployment verification for the existing `math.calculate` ALOHA-managed capability and stop there. M2 proves the mediated invocation path; it does not become a generic Runtime permission/sandbox milestone.
+4. **M3 — LifeSpace Identity + Agent Ready read path.** Consume LifeSpace as the trusted Identity / domain-authority source, preserve Principal（权限主体） / Actor（执行者） / Application Context（应用上下文）, consume authority-scoped Runtime Discovery（运行时发现）, and prove one representative real read/query plus deny path. Do not duplicate LifeSpace Membership / Grant / Delegation / model authorization logic in ALOHA.
+5. **M4 — LifeSpace mutation + semantic Action + Confirmation.** Prove a representative real write, semantic Action（语义动作）, Change attribution（变更归因）, stale/invalid deny and revocation behavior. Add only the minimum ALOHA Confirmation（确认） gate required by the first real confirmation-required product action; if n8n cannot safely enforce suspend/resume, execute the approved sensitive action through the ALOHA-controlled path rather than weakening the rule.
+6. **M5 — separate n8n Workflow Capability.** After trusted identity, real domain access and confirmation are proven, validate n8n's second role by calling one independent Workflow / Integration Capability from the Agent Runtime without conflating the two workflows.
+7. Run the **MVP Client track in parallel** with M3/M4: implement the State-first（状态优先） Current Work Surface, shared Desktop/Mobile Composer behavior, real text flow, image input, normalized working/result/failure/permission-denied presentation, and the Confirmation UI required by M4.
+8. **MVP closure/hardening:** finish deployment acceptance, real deny/failure paths, public-repository safety checks, and only the Run/Event normalization needed by the usable first-party client.
+
+HomeMew-specific direct integration is not an independent MVP milestone unless a real **HomeMew-owned behavior** is needed. Shared family Task/Event data should prefer the authorized LifeSpace family-Space path. Voice production polish, arbitrary file/video/location inputs, full Settings, Facet, Poina, Relay, a second Runtime Backend and generic Runtime feature negotiation/sandboxing remain post-MVP unless a concrete blocker proves otherwise.
 
 Do not build a generic Agent Framework merely to make Runtime backends theoretically interchangeable. Keep the stable ALOHA semantic boundary small; n8n Agent is the concrete MVP implementation, while replacement compatibility is preserved by keeping n8n-native semantics behind the Runtime Adapter and allowing explicit degradation when a future backend cannot enforce every ALOHA control semantic equally.
