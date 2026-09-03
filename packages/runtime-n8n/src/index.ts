@@ -87,6 +87,62 @@ const classifyFetchFailure = (error: unknown): N8nRuntimeError => {
   )
 }
 
+const classifyHttpFailure = (status: number): N8nRuntimeError => {
+  if (status === 401 || status === 403) {
+    return new N8nRuntimeError(
+      'n8n_auth_failed',
+      'The n8n Agent runtime rejected its deployment credential.',
+      false,
+    )
+  }
+
+  if (status === 404) {
+    return new N8nRuntimeError(
+      'n8n_endpoint_not_found',
+      'The configured n8n Agent runtime endpoint was not found.',
+      false,
+    )
+  }
+
+  if (status === 405) {
+    return new N8nRuntimeError(
+      'n8n_method_not_allowed',
+      'The n8n Agent runtime endpoint rejected the request method.',
+      false,
+    )
+  }
+
+  if (status === 408) {
+    return new N8nRuntimeError(
+      'n8n_request_timeout',
+      'The n8n Agent runtime request timed out.',
+      true,
+    )
+  }
+
+  if (status === 429) {
+    return new N8nRuntimeError(
+      'n8n_rate_limited',
+      'The n8n Agent runtime rate limited the request.',
+      true,
+    )
+  }
+
+  if (status >= 500) {
+    return new N8nRuntimeError(
+      'n8n_backend_error',
+      'The n8n Agent runtime returned a backend error.',
+      true,
+    )
+  }
+
+  return new N8nRuntimeError(
+    'n8n_http_error',
+    'The n8n Agent runtime rejected the request.',
+    false,
+  )
+}
+
 export class N8nAgentRuntimeAdapter implements RuntimeAdapter {
   private readonly config: N8nAgentRuntimeConfig
   private readonly fetchImpl: FetchLike
@@ -128,11 +184,7 @@ export class N8nAgentRuntimeAdapter implements RuntimeAdapter {
     }
 
     if (!response.ok) {
-      throw new N8nRuntimeError(
-        'n8n_http_error',
-        `The n8n Agent runtime returned HTTP ${response.status}.`,
-        response.status === 429 || response.status >= 500,
-      )
+      throw classifyHttpFailure(response.status)
     }
 
     let payload: unknown
