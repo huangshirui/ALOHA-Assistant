@@ -54,6 +54,29 @@ describe('N8nAgentRuntimeAdapter', () => {
     expect(headers.get('authorization')).toBe('Bearer synthetic-test-token')
   })
 
+  it('invokes fetch without binding the adapter as the receiver', async () => {
+    let receiver: unknown = 'not-called'
+    const fetchImpl = async function (
+      this: unknown,
+      _input: RequestInfo | URL,
+      _init?: RequestInit,
+    ) {
+      receiver = this
+      return Response.json({ outputText: 'receiver-safe' })
+    }
+
+    const adapter = new N8nAgentRuntimeAdapter(
+      { webhookUrl: 'https://example.com/aloha-agent' },
+      fetchImpl,
+    )
+
+    await expect(adapter.run(runRequest)).resolves.toEqual({
+      outputText: 'receiver-safe',
+      backendRunId: undefined,
+    })
+    expect(receiver).toBeUndefined()
+  })
+
   it('rejects malformed or unsafe webhook URLs before network access', async () => {
     const fetchImpl = vi.fn()
     const malformedAdapter = new N8nAgentRuntimeAdapter(
