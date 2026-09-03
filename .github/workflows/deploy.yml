@@ -55,6 +55,66 @@ jobs:
           workingDirectory: workers/agent-control
           command: deploy
 
+      - name: Ensure internal capability signing secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          secrets_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/aloha-agent-control/secrets"
+          current_secrets="$(
+            curl --fail-with-body --silent --show-error \
+              "$secrets_url" \
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+          )"
+
+          has_signing_key="$(
+            printf '%s' "$current_secrets" | node -e '
+              let input = "";
+              process.stdin.setEncoding("utf8");
+              process.stdin.on("data", (chunk) => (input += chunk));
+              process.stdin.on("end", () => {
+                const payload = JSON.parse(input);
+                if (payload.success !== true || !Array.isArray(payload.result)) {
+                  process.exit(1);
+                }
+                process.stdout.write(
+                  payload.result.some((item) => item?.name === "CAPABILITY_GRANT_SIGNING_KEY")
+                    ? "yes"
+                    : "no",
+                );
+              });
+            '
+          )"
+
+          if [ "$has_signing_key" = "no" ]; then
+            capability_signing_key="$(openssl rand -hex 32)"
+            secret_payload="$(
+              CAPABILITY_SIGNING_KEY="$capability_signing_key" node -e '
+                process.stdout.write(JSON.stringify({
+                  name: "CAPABILITY_GRANT_SIGNING_KEY",
+                  type: "secret_text",
+                  text: process.env.CAPABILITY_SIGNING_KEY,
+                }));
+              '
+            )"
+
+            curl --fail-with-body --silent --show-error \
+              --request PUT \
+              "$secrets_url" \
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              --header "Content-Type: application/json" \
+              --data "$secret_payload" \
+              >/dev/null
+
+            unset capability_signing_key secret_payload
+            echo "Initialized CAPABILITY_GRANT_SIGNING_KEY on Agent Control."
+          else
+            echo "CAPABILITY_GRANT_SIGNING_KEY already exists; preserving the existing value."
+          fi
+
       - name: Deploy Gateway with Web static assets
         uses: cloudflare/wrangler-action@v3
         with:
