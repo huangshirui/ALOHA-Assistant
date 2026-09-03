@@ -58,6 +58,14 @@ Gateway forwards the original `Request` through the `AGENT_CONTROL` Service Bind
 
 Do not replace this with browser-supplied `userId`, email, decoded Access claims or another unsigned identity hint.
 
+## Pre-merge candidate deployment
+
+Normal push deployment remains `main`-only. Because M3 requires real deployment evidence before the draft pull request becomes merge-ready, pre-merge acceptance uses the existing manual `workflow_dispatch` entry point with `feat/m3-canonical-run-state` selected as the workflow ref.
+
+That manual run is a production candidate deployment, not a second environment or a bypass around repository checks. It still executes the repository verification and the M1/M2 deployed smoke gates before the M3 identity gate is run separately. Do not use a pull-request-triggered privileged deployment or expose deployment secrets to untrusted code.
+
+After M3 acceptance succeeds, merge the already-verified source through the normal branch rules. The subsequent `main` deployment remains the canonical production deployment and must keep M1/M2 gates green.
+
 ## Real M3 verifier
 
 Use the repository verifier only with short-lived deployment credentials that remain outside source control and logs:
