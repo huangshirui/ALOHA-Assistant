@@ -162,6 +162,29 @@ Conceptually, exposed capabilities are bounded by:
 
 Capability adapters may expose LifeSpace, HomeMew, n8n workflows, Relay, Poina and future systems while preserving their independent domain ownership.
 
+### M2 concrete Direct Capability boundary
+
+M2 instantiates this boundary with the first Direct Capability（直接能力）, `math.calculate`. It is deliberately deterministic, low-risk, idempotent and authority-free so the first slice can prove Capability exposure and invocation without pretending that trusted LifeSpace Principal / Grant integration already exists.
+
+For each Run, Agent Control selects only capabilities allowed by the authority/context currently available. In M2, that means only a capability requiring no scopes and no confirmation may be exposed. When capability-grant signing is not configured, the exposed set is empty.
+
+For each exposed capability, Agent Control mints a short-lived signed Capability Grant（能力授权令牌） bound to that Run, Application and capability id. The Runtime receives the canonical capability metadata plus an HTTP invocation descriptor carrying only that narrow temporary authority. It does **not** receive the signing key or a static broad ALOHA credential.
+
+The external n8n Runtime calls the capability through the public Gateway route:
+
+```text
+POST /v1/runtime/capabilities/:capabilityId/invoke
+  -> Gateway (transport/routing only)
+  -> Agent Control (grant verification + policy enforcement)
+  -> Capability execution
+```
+
+Gateway does not decide whether a Capability is allowed. Agent Control verifies the grant and re-checks the admitted capability requirements before execution.
+
+The M2 grant can be replayed during its short validity window. That is acceptable only for the first idempotent, low-risk arithmetic capability. Mutating or high-impact capabilities must add the appropriate confirmation, idempotency and replay semantics before they are exposed.
+
+The n8n Agent remains the reasoning/tool-loop Runtime Backend. Its M2 HTTP Tool is only a Runtime-specific representation of the ALOHA `math.calculate` capability; n8n does not become the canonical Capability registry or authorization authority. See `docs/direct-capability.md` for the concrete contract and deployment acceptance criteria.
+
 n8n has two valid roles and the MVP intentionally exercises both:
 
 1. **Runtime Backend** — the selected n8n Agent workflow executes the ALOHA Run through the n8n Runtime Adapter.
@@ -223,7 +246,7 @@ Do not introduce a generic adapter framework beyond the abstractions actually ne
 3. Wire `web -> gateway -> agent-control` with progressive/streaming-friendly contracts.
 4. Define the smallest Runtime Contract required by the selected n8n Agent workflow.
 5. Implement the n8n Runtime Adapter and run one real ALOHA Run through the n8n Agent workflow.
-6. Add one direct capability exposed to that Agent.
+6. Add one direct capability exposed to that Agent. **M2 source implemented; deployed capability verification remains the current gate.**
 7. Add one **separate** n8n workflow capability to prove the Runtime/Capability roles can coexist cleanly.
 8. Add one authorized LifeSpace / HomeMew read-write scenario.
 9. Normalize the real n8n execution states/results into the ALOHA first-party Run/Stream event model.
