@@ -15,8 +15,9 @@ jobs:
           node-version: 22
       - name: Use repository npm version
         run: npm install --global npm@10.9.2
-      # Switch to npm ci + npm cache after the first package-lock.json is committed.
-      - run: npm install
+      # The repository has no lockfile yet. --legacy-peer-deps avoids the current
+      # npm Arborist peer-set crash; remove it when switching to npm ci.
+      - run: npm install --legacy-peer-deps
       - run: npm run check
 
   secret-scan:
