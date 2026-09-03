@@ -26,6 +26,9 @@ jobs:
         with:
           node-version: 22
 
+      - name: Use repository npm version
+        run: npm install --global npm@10.9.2
+
       # The repository intentionally has no lockfile yet; switch this to npm ci
       # when package-lock.json is committed, matching ci.yml.
       - name: Install dependencies
