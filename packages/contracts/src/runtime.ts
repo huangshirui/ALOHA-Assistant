@@ -1,7 +1,5 @@
-import type {
-  CapabilityJsonSchema,
-  InteractionAttachment,
-} from './index'
+import type { CapabilityJsonSchema } from './capability'
+import type { InteractionAttachment } from './interaction'
 
 export interface RuntimeRunRequest {
   requestId: string
