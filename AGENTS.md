@@ -49,6 +49,7 @@ If a required source of truth does not exist, establish the smallest explicit co
 
 - Product boundary and MVP acceptance: `README.md`
 - Architecture and repository boundaries: `docs/architecture.md`
+- Runtime trust, independent Runtime authority and confirmation security boundary: `docs/runtime-trust-authority.md`
 - First-party interaction and UI behavior: relevant `docs/*` product specs
 - Shared ALOHA interaction/context/run/capability/runtime-facing types: `packages/contracts`
 - ALOHA Capability registration/adaptation: `packages/capabilities`
@@ -98,7 +99,8 @@ ALOHA may act for the user, but it does not gain authority merely because it is 
 
 ### Agent Control（智能体控制层）
 
-- Agent Control owns ALOHA product semantics around a Run: verified Identity/Principal context, authorization context, Context Envelope policy, Capability exposure policy, confirmation policy, Conversation / Run semantics, Runtime selection and canonical event normalization.
+- Agent Control owns ALOHA product semantics around a Run: verified Identity/Principal context, authorization context, Context Envelope policy, ALOHA-managed Capability exposure policy, confirmation policy, Conversation / Run semantics, Runtime selection and canonical event normalization.
+- Agent Control may narrow what ALOHA exposes or executes for the current Run, but it cannot revoke tools, credentials or authority that a Runtime Backend already owns independently unless that Runtime provides a real enforceable control used by the adapter.
 - Agent Control is **not** a generic Agent Runtime / Framework and must not grow a model/tool loop merely because no Runtime Backend has been selected yet.
 - Runtime-specific SDK/protocol/session/event details must stay behind explicit Runtime Adapters.
 - ALOHA canonical events must not be defined by a single Runtime backend's native event types.
@@ -110,12 +112,13 @@ ALOHA may act for the user, but it does not gain authority merely because it is 
 - Do not design for multi-cloud or multi-runtime active-active by default. Keep one Primary Runtime and preserve a small replacement boundary.
 - Do not force all runtimes into a lowest-common-denominator abstraction. Stable core semantics may coexist with optional runtime capabilities.
 - Backend-private execution/session state may be backend-specific; authoritative ALOHA/user data must remain in its owning system.
+- Prompt/system instructions are behavior guidance, **not an authorization boundary**. Hard confinement requires credential isolation, ALOHA-mediated invocation, downstream authorization checks, or enforceable Runtime tool/sandbox controls.
 
 ### Capability（能力）
 
-- A Runtime receives only capabilities permitted by verified Principal authority × ALOHA Application scope × current policy.
+- A Runtime receives only the **ALOHA-managed capabilities that ALOHA exposes** under verified Principal authority × ALOHA Application scope × current Run policy. This statement does not imply that ALOHA controls independent Runtime-native tools.
 - A Capability is an explicit callable boundary, not a place to copy another system's business logic into ALOHA.
-- LifeSpace remains the Identity / Shared Reality authority for data it owns.
+- LifeSpace remains the Identity / Shared Reality authority for data it owns; ALOHA consumes its verified identity/effective authority and does not duplicate LifeSpace Membership / Grant / Agent Delegation / model authorization logic.
 - HomeMew remains the family product/domain capability provider for HomeMew-owned behavior.
 - Relay（委托工作）, Poina（长期记忆）, Facet（生成式人机交互）, 知了（通知） and other infrastructure stay independently owned and are integrated through contracts.
 - n8n may be either (a) a Workflow / Integration Capability called by another Runtime, or (b) an Agent Runtime Backend when an n8n workflow itself is configured as an Agent. Keep the two roles explicit.
@@ -126,6 +129,8 @@ ALOHA may act for the user, but it does not gain authority merely because it is 
 - Authentication and authorization must be derived from verified credentials/context at a trusted boundary.
 - Preserve Principal / Actor / Application attribution through Agent Control, Runtime and Capability calls.
 - High-impact external sends, important mutations and irreversible actions require an explicit confirmation path unless a deliberately scoped automation policy says otherwise.
+- Confirmation is bound to the concrete proposed action and its critical parameters; it is not a reusable domain permission. Material changes after confirmation require new confirmation unless an explicit scoped automation policy covers the changed action.
+- Confirmation enforcement must happen in trusted code outside the model. A Prompt instruction to "ask first" is insufficient.
 
 ## Context Envelope（上下文信封）
 
