@@ -13,8 +13,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      # Switch to npm ci + npm cache after the first package-lock.json is committed.
-      - run: npm install
+      - name: Use repository npm version
+        run: npm install --global npm@10.9.2
+      # The repository has no lockfile yet. --legacy-peer-deps avoids the current
+      # npm Arborist peer-set crash; remove it when switching to npm ci.
+      - run: npm install --legacy-peer-deps
       - run: npm run check
 
   secret-scan:
