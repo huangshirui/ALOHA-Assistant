@@ -103,7 +103,7 @@ describe('agent-control slice 1', () => {
     const body = await response.text()
     expect(body).toContain('event: run.started')
     expect(body).toContain('event: run.failed')
-    expect(body).toContain('n8n_http_error')
+    expect(body).toContain('n8n_backend_error')
     expect(body).not.toContain('synthetic backend detail')
   })
 })
