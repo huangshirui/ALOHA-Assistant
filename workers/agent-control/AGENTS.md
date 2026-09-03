@@ -4,6 +4,8 @@
 
 In the current Cloudflare MVP deployment, Agent Control is an internal-only Worker with no public `workers.dev` or preview URL. Gateway reaches it through a Service Binding（服务绑定）. Runtime backend secrets are configured on this Worker after its first infrastructure deployment; until configured, the explicit `runtime_backend_not_configured` state remains valid and must not be presented as a working n8n integration.
 
+M2 Direct Capability invocation uses deployment-only `CAPABILITY_GRANT_SIGNING_KEY` to mint and verify short-lived, Run-scoped Capability Grants（能力授权令牌）. If the signing key is absent, expose no runtime-callable capabilities. Never replace these narrow grants with a static broad Runtime credential merely for convenience.
+
 ## Rules
 
 - Own verified Identity / Principal context, authorization context, Context Envelope assembly/policy, Capability exposure policy, confirmation policy, Conversation / Run product semantics, Runtime selection and canonical event normalization.
@@ -16,4 +18,4 @@ In the current Cloudflare MVP deployment, Agent Control is an internal-only Work
 - Normalize backend-native output into ALOHA canonical Run / Stream Events for clients and channels.
 - Do not persist durable Shared Reality, long-term memory or delegated-work infrastructure locally when those responsibilities belong to LifeSpace, Poina or Relay.
 - A Runtime backend may also call n8n as a Capability; separately, an n8n Agent workflow may itself be selected as a Runtime backend. Keep those two roles explicit.
-- Do not treat successful Worker deployment as proof that the n8n Runtime is configured or verified; M1 remains gated on a real end-to-end Runtime run.
+- Treat the current M2 grant replay window as acceptable only for low-risk idempotent capabilities such as `math.calculate`; mutating or high-impact capabilities require confirmation/idempotency/replay semantics before exposure.
