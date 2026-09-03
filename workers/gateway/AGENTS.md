@@ -2,6 +2,8 @@
 
 `workers/gateway` is ALOHA's thin external transport and channel boundary. It sits between first-party/third-party channels and ALOHA Agent Control（智能体控制层）; it is not the Agent Runtime.
 
+In the current Cloudflare MVP deployment, the built first-party Web/PWA is attached to this Worker as Static Assets（静态资源） so Web and API share one public origin. This is a physical deployment optimization only; `apps/web` remains the owner of product UI behavior and Gateway runtime code remains transport/channel focused.
+
 ## Rules
 
 - Own request admission, authentication handoff, channel adaptation, protocol normalization, session/stream transport, routing and transport-level errors.
@@ -12,4 +14,5 @@
 - Forward only verified/normalized identity and delegated-authority context from trusted boundaries to Agent Control.
 - Prefer an explicit Service Binding or another authenticated internal interface to reach Agent Control; do not couple through persistence.
 - Keep CORS, rate limiting and transport controls separate from product/domain authorization.
+- Serving compiled Web/PWA assets from the Gateway deployment must not move UI/product logic into `workers/gateway`; keep source UI ownership in `apps/web`.
 - Any external protocol change must update `packages/contracts`, affected clients/Agent Control, tests and `docs/architecture.md` when the boundary changes.
