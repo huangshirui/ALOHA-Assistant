@@ -18,7 +18,7 @@ export default {
     const url = new URL(request.url)
 
     if (url.pathname === '/health') {
-      return json({ service: 'aloha-gateway', ok: true })
+      return json({ service: 'aloha-edge', ok: true })
     }
 
     if (
