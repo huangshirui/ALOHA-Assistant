@@ -119,17 +119,20 @@ LifeSpace Core remains a Tool provider, not an internal Agent Control service.
 ## MVP execution order
 
 1. **M0/M1 — complete:** first text Interaction path and real n8n Agent Runtime bootstrap.
-2. **M2 — complete and production-verified:** `math.calculate` is exercised through the real Gateway -> Agent Control -> Capability Grant -> n8n Agent Tool path; production deployment now includes repeatable M1/M2 smoke gates.
-3. **M3 — source implemented, deployment activation next:** Canonical Run Envelope v1, trusted LifeSpace Identity binding and durable Conversation / Run state are implemented and covered by CI. Production identity acceptance still requires deployment-local LifeSpace application/Agent provisioning and Worker configuration.
-4. **M4 — real personal-assistant Tools:** connect the first useful Runtime Tool provider, with LifeSpace Core preferred for the representative first domain scenario.
-5. **M5 — first Confirmation-required action:** implement the minimum Confirmation flow when the first real mutating/high-impact action requires it.
-6. **MVP Client — parallel:** complete State-first Current Work Surface, Desktop/Mobile Composer, text/image submission and normalized Run/error/confirmation presentation.
-7. **MVP closure:** deployed end-to-end acceptance, failure/deny paths, public-repository safety and usability validation.
+2. **M2 — complete and production-verified:** `math.calculate` is exercised through the real Gateway -> Agent Control -> Capability Grant -> n8n Agent Tool path.
+3. **M3 — complete and production-verified:** Canonical Run Envelope v1, trusted LifeSpace Identity binding and durable Conversation / Run state are deployed on `main`; Access-authenticated M1/M2/M3 acceptance passes against the canonical production boundary.
+4. **PWA Interaction v1 — active:** make the State-first Current Work Surface usable for daily interaction before adding more backend capability. The first slice covers durable current-Conversation recovery, local text-draft recovery, Desktop/Mobile Composer behavior, progressive Run result/error presentation and same-conversation interruption semantics already supported by M3.
+5. **M4 — real personal-assistant Tools:** connect the first useful Runtime Tool provider, with LifeSpace Core preferred for the representative first domain scenario. PWA work continues in parallel so each Tool is immediately usable from the first-party client.
+6. **M5 — first Confirmation-required action:** implement the minimum Confirmation flow when the first real mutating/high-impact action requires it.
+7. **MVP Client continuation:** add text/image/resource submission, voice interaction, History and normalized Confirmation presentation according to the existing PWA/Composer specifications; do not turn the Current Work Surface into a traditional chat transcript.
+8. **MVP closure:** deployed end-to-end acceptance, failure/deny paths, public-repository safety and usability validation.
 
 ## Sources of truth
 
 - `README.md` — product boundary and MVP target
 - [`docs/architecture.md`](./docs/architecture.md) — current architecture and implementation order
+- [`docs/pwa-interaction.md`](./docs/pwa-interaction.md) — State-first PWA product interaction baseline
+- [`docs/composer-state-machine.md`](./docs/composer-state-machine.md) — Composer states, guards and lifecycle invariants
 - [`docs/canonical-run-envelope.md`](./docs/canonical-run-envelope.md) — Canonical Run Envelope v1 + persistent Conversation / Run representation
 - [`docs/conversation-run-lifecycle.md`](./docs/conversation-run-lifecycle.md) — Conversation / Run product lifecycle
 - [`docs/interaction-protocol.md`](./docs/interaction-protocol.md) — first-party Interaction Protocol
