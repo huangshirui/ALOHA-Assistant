@@ -5,6 +5,7 @@ import type {
   InteractionInput,
   RunEvent,
   RuntimeCapabilityDescriptor,
+  RuntimeToolDescriptor,
 } from '@aloha/contracts'
 import {
   CapabilityInputError,
@@ -19,6 +20,12 @@ import {
   LifeSpaceIdentityError,
   resolveLifeSpaceRunIdentity,
 } from './lifespace-identity'
+import {
+  createLifeSpaceReadToolDescriptor,
+  invokeLifeSpaceReadTool,
+  isLifeSpaceReadToolConfigured,
+  LIFESPACE_READ_TOOL_ID,
+} from './lifespace-runtime-tool'
 
 export { AlohaUserState } from './conversation-run-state'
 
@@ -34,7 +41,9 @@ interface Env {
   N8N_AGENT_WEBHOOK_URL?: string
   N8N_AGENT_AUTH_TOKEN?: string
   CAPABILITY_GRANT_SIGNING_KEY?: string
+  RUNTIME_TOOL_GRANT_SIGNING_KEY?: string
   LIFESPACE_IDENTITY_BASE_URL?: string
+  LIFESPACE_CORE_API_BASE_URL?: string
   LIFESPACE_APPLICATION_CREDENTIAL?: string
   ALOHA_STATE?: AgentControlStateNamespace
 }
@@ -79,9 +88,7 @@ const readInteractionInput = async (
     return null
   }
 
-  if (!isRecord(value)) {
-    return null
-  }
+  if (!isRecord(value)) return null
 
   return {
     requestId:
@@ -102,11 +109,7 @@ const toSseFrame = (event: RunEvent): Uint8Array =>
 
 const toBase64Url = (bytes: Uint8Array): string => {
   let binary = ''
-
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte)
-  }
-
+  for (const byte of bytes) binary += String.fromCharCode(byte)
   return btoa(binary)
     .replaceAll('+', '-')
     .replaceAll('/', '_')
@@ -114,10 +117,7 @@ const toBase64Url = (bytes: Uint8Array): string => {
 }
 
 const fromBase64Url = (value: string): Uint8Array | null => {
-  if (!/^[A-Za-z0-9_-]+$/u.test(value)) {
-    return null
-  }
-
+  if (!/^[A-Za-z0-9_-]+$/u.test(value)) return null
   const padded = `${value.replaceAll('-', '+').replaceAll('_', '/')}${'='.repeat((4 - (value.length % 4)) % 4)}`
 
   try {
@@ -146,7 +146,6 @@ const issueCapabilityGrant = async (
   const signature = new Uint8Array(
     await crypto.subtle.sign('HMAC', key, encoder.encode(payload)),
   )
-
   return `${payload}.${toBase64Url(signature)}`
 }
 
@@ -156,17 +155,11 @@ const verifyCapabilityGrant = async (
   expectedCapabilityId: string,
 ): Promise<CapabilityGrantClaims | null> => {
   const [payload, encodedSignature, extra] = token.split('.')
-
-  if (!payload || !encodedSignature || extra) {
-    return null
-  }
+  if (!payload || !encodedSignature || extra) return null
 
   const payloadBytes = fromBase64Url(payload)
   const signature = fromBase64Url(encodedSignature)
-
-  if (!payloadBytes || !signature) {
-    return null
-  }
+  if (!payloadBytes || !signature) return null
 
   const key = await importCapabilityGrantKey(signingKey)
   const valid = await crypto.subtle.verify(
@@ -175,13 +168,9 @@ const verifyCapabilityGrant = async (
     signature.buffer as ArrayBuffer,
     encoder.encode(payload),
   )
-
-  if (!valid) {
-    return null
-  }
+  if (!valid) return null
 
   let claims: unknown
-
   try {
     claims = JSON.parse(decoder.decode(payloadBytes))
   } catch {
@@ -196,8 +185,7 @@ const verifyCapabilityGrant = async (
     claims.applicationId !== ALOHA_APPLICATION_ID ||
     !Array.isArray(claims.scopes) ||
     !claims.scopes.every((scope) => typeof scope === 'string') ||
-    (claims.principalId !== undefined &&
-      typeof claims.principalId !== 'string') ||
+    (claims.principalId !== undefined && typeof claims.principalId !== 'string') ||
     (claims.actorId !== undefined && typeof claims.actorId !== 'string') ||
     typeof claims.expiresAt !== 'number' ||
     claims.expiresAt <= Date.now()
@@ -238,9 +226,7 @@ const runtimeCapabilityDescriptors = async (
   signingKey: string | undefined,
   identity: CanonicalRunIdentity | null,
 ): Promise<RuntimeCapabilityDescriptor[]> => {
-  if (!signingKey) {
-    return []
-  }
+  if (!signingKey) return []
 
   const context = capabilityContext(runId, identity)
   const origin = new URL(request.url).origin
@@ -278,13 +264,25 @@ const runtimeCapabilityDescriptors = async (
   return descriptors
 }
 
+const runtimeToolDescriptors = async (
+  request: Request,
+  runId: string,
+  identity: CanonicalRunIdentity | null,
+  env: Env,
+): Promise<RuntimeToolDescriptor[]> => {
+  const lifeSpaceRead = await createLifeSpaceReadToolDescriptor(
+    request,
+    runId,
+    identity,
+    env,
+  )
+  return lifeSpaceRead ? [lifeSpaceRead] : []
+}
+
 const capabilityIdFromPath = (pathname: string): string | null => {
   const match = pathname.match(/^\/v1\/runtime\/capabilities\/([^/]+)\/invoke$/u)
   const encodedCapabilityId = match?.[1]
-
-  if (!encodedCapabilityId) {
-    return null
-  }
+  if (!encodedCapabilityId) return null
 
   try {
     return decodeURIComponent(encodedCapabilityId)
@@ -299,11 +297,7 @@ const invokeCapability = async (
   capabilityId: string,
 ): Promise<Response> => {
   const capability = registry.get(capabilityId)
-
-  if (!capability) {
-    return json({ error: 'capability_not_found' }, 404)
-  }
-
+  if (!capability) return json({ error: 'capability_not_found' }, 404)
   if (!env.CAPABILITY_GRANT_SIGNING_KEY) {
     return json({ error: 'capability_invocation_not_configured' }, 503)
   }
@@ -312,29 +306,21 @@ const invokeCapability = async (
   const token = authorization?.startsWith('Bearer ')
     ? authorization.slice('Bearer '.length)
     : null
-
-  if (!token) {
-    return json({ error: 'capability_grant_required' }, 401)
-  }
+  if (!token) return json({ error: 'capability_grant_required' }, 401)
 
   const claims = await verifyCapabilityGrant(
     token,
     env.CAPABILITY_GRANT_SIGNING_KEY,
     capabilityId,
   )
-
-  if (!claims) {
-    return json({ error: 'invalid_capability_grant' }, 401)
-  }
+  if (!claims) return json({ error: 'invalid_capability_grant' }, 401)
 
   let body: unknown
-
   try {
     body = await request.json()
   } catch {
     return json({ error: 'invalid_json_body' }, 400)
   }
-
   if (!isRecord(body) || !Object.hasOwn(body, 'input')) {
     return json({ error: 'capability_input_required' }, 400)
   }
@@ -361,7 +347,6 @@ const invokeCapability = async (
     if (error instanceof CapabilityInputError) {
       return json({ error: 'invalid_capability_input' }, 400)
     }
-
     return json({ error: 'capability_execution_failed' }, 500)
   }
 }
@@ -390,10 +375,7 @@ const admitPersistedRun = async (
   },
 ): Promise<PersistedAdmission | Response> => {
   const stub = stateStubFor(env, input.identity.principal.id)
-
-  if (!stub) {
-    return json({ error: 'conversation_state_not_configured' }, 503)
-  }
+  if (!stub) return json({ error: 'conversation_state_not_configured' }, 503)
 
   const response = await stateRequest(stub, '/admit', {
     requestId: input.requestId,
@@ -413,7 +395,6 @@ const admitPersistedRun = async (
   }
 
   const payload = await response.json().catch(() => null)
-
   if (
     !isRecord(payload) ||
     typeof payload.conversationId !== 'string' ||
@@ -438,16 +419,10 @@ const transitionPersistedRun = async (
   body: Record<string, unknown>,
 ): Promise<void> => {
   const stub = stateStubFor(env, principalId)
-
-  if (!stub) {
-    throw new Error('conversation_state_not_configured')
-  }
+  if (!stub) throw new Error('conversation_state_not_configured')
 
   const response = await stateRequest(stub, path, body)
-
-  if (!response.ok) {
-    throw new Error('conversation_state_unavailable')
-  }
+  if (!response.ok) throw new Error('conversation_state_unavailable')
 }
 
 const canonicalEnvelope = (input: {
@@ -457,6 +432,7 @@ const canonicalEnvelope = (input: {
   text: string
   identity: CanonicalRunIdentity | null
   capabilities: RuntimeCapabilityDescriptor[]
+  tools: RuntimeToolDescriptor[]
 }): CanonicalRunEnvelopeV1 => ({
   schemaVersion: 1,
   run: {
@@ -468,6 +444,7 @@ const canonicalEnvelope = (input: {
   identity: input.identity,
   context: { channel: 'web' },
   capabilities: input.capabilities,
+  ...(input.tools.length > 0 ? { tools: input.tools } : {}),
 })
 
 export default {
@@ -479,6 +456,13 @@ export default {
       return invokeCapability(request, env, capabilityId)
     }
 
+    if (
+      url.pathname === `/v1/runtime/tools/${LIFESPACE_READ_TOOL_ID}/invoke` &&
+      request.method === 'POST'
+    ) {
+      return invokeLifeSpaceReadTool(request, env)
+    }
+
     if (url.pathname === '/health') {
       return json({
         service: 'aloha-agent-control',
@@ -486,6 +470,9 @@ export default {
         canonicalRunEnvelopeVersion: 1,
         capabilities: capabilityIds(),
         capabilityInvocationConfigured: Boolean(env.CAPABILITY_GRANT_SIGNING_KEY),
+        runtimeTools: isLifeSpaceReadToolConfigured(env)
+          ? [LIFESPACE_READ_TOOL_ID]
+          : [],
         identityConfigured: isLifeSpaceIdentityConfigured(env),
         conversationStateConfigured: Boolean(env.ALOHA_STATE),
         runtimeBackend: env.N8N_AGENT_WEBHOOK_URL ? 'n8n-agent' : null,
@@ -494,27 +481,18 @@ export default {
 
     if (url.pathname === '/v1/interactions' && request.method === 'POST') {
       const input = await readInteractionInput(request)
-
-      if (!input) {
-        return json({ error: 'invalid_json_body' }, 400)
-      }
+      if (!input) return json({ error: 'invalid_json_body' }, 400)
 
       const text = input.text?.trim()
-
-      if (!text) {
-        return json({ error: 'text_input_required' }, 400)
-      }
-
+      if (!text) return json({ error: 'text_input_required' }, 400)
       if (input.attachments && input.attachments.length > 0) {
         return json({ error: 'attachments_not_supported_in_slice_1' }, 400)
       }
-
       if (!env.N8N_AGENT_WEBHOOK_URL) {
         return json({ error: 'runtime_backend_not_configured' }, 503)
       }
 
       let identityResolution: Awaited<ReturnType<typeof resolveLifeSpaceRunIdentity>>
-
       try {
         identityResolution = await resolveLifeSpaceRunIdentity(request, env)
       } catch (error) {
@@ -535,10 +513,7 @@ export default {
           identity: identityResolution.identity,
           text,
         })
-
-        if (admission instanceof Response) {
-          return admission
-        }
+        if (admission instanceof Response) return admission
 
         conversationId = admission.conversationId
         runId = admission.runId
@@ -567,6 +542,7 @@ export default {
         env.CAPABILITY_GRANT_SIGNING_KEY,
         identity,
       )
+      const tools = await runtimeToolDescriptors(request, runId, identity, env)
       const envelope = canonicalEnvelope({
         requestId,
         runId,
@@ -574,6 +550,7 @@ export default {
         text,
         identity,
         capabilities,
+        tools,
       })
       const adapter = new N8nAgentRuntimeAdapter({
         webhookUrl: env.N8N_AGENT_WEBHOOK_URL,
@@ -583,7 +560,6 @@ export default {
       const stream = new ReadableStream<Uint8Array>({
         start(controller) {
           let sequence = 0
-
           const base = () => ({
             eventId: crypto.randomUUID(),
             runId,
@@ -591,17 +567,12 @@ export default {
             sequence: ++sequence,
             occurredAt: new Date().toISOString(),
           })
-
           const emit = (event: RunEvent) => {
             controller.enqueue(toSseFrame(event))
           }
 
           const execute = async () => {
-            emit({
-              ...base(),
-              type: 'run.started',
-              requestId,
-            })
+            emit({ ...base(), type: 'run.started', requestId })
 
             try {
               const result = await adapter.run(envelope)
@@ -626,18 +597,11 @@ export default {
                 type: 'output.delta',
                 delta: result.outputText,
               })
-
-              emit({
-                ...base(),
-                type: 'run.completed',
-              })
+              emit({ ...base(), type: 'run.completed' })
             } catch (error) {
               const normalized =
                 error instanceof N8nRuntimeError
-                  ? {
-                      code: error.code,
-                      retryable: error.retryable,
-                    }
+                  ? { code: error.code, retryable: error.retryable }
                   : error instanceof Error &&
                       error.message === 'conversation_state_unavailable'
                     ? {
