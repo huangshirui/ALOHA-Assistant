@@ -5,6 +5,7 @@
   "compatibility_date": "2026-09-01",
   "workers_dev": false,
   "preview_urls": false,
+  "keep_vars": true,
   "durable_objects": {
     "bindings": [
       {
@@ -24,6 +25,11 @@
     }
   },
   "secrets": {
-    "required": ["N8N_AGENT_WEBHOOK_URL", "N8N_AGENT_AUTH_TOKEN"]
+    "required": [
+      "N8N_AGENT_WEBHOOK_URL",
+      "N8N_AGENT_AUTH_TOKEN",
+      "LIFESPACE_IDENTITY_BASE_URL",
+      "LIFESPACE_APPLICATION_CREDENTIAL"
+    ]
   }
 }
