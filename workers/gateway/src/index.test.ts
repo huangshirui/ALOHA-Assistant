@@ -38,6 +38,34 @@ describe('gateway routing', () => {
     expect(response.status).toBe(200)
   })
 
+  it('preserves the server-visible Cloudflare Access assertion for Agent Control identity resolution', async () => {
+    const binding = {
+      fetch: vi.fn(async (request: Request) => {
+        expect(request.headers.get('Cf-Access-Jwt-Assertion')).toBe(
+          'synthetic.payload.signature',
+        )
+        return new Response('event: run.completed\ndata: {}\n\n', {
+          headers: { 'content-type': 'text/event-stream' },
+        })
+      }),
+    }
+
+    const response = await worker.fetch(
+      new Request('https://example.com/v1/interactions', {
+        method: 'POST',
+        headers: {
+          'Cf-Access-Jwt-Assertion': 'synthetic.payload.signature',
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ text: 'Synthetic interaction' }),
+      }),
+      { AGENT_CONTROL: binding },
+    )
+
+    expect(binding.fetch).toHaveBeenCalledTimes(1)
+    expect(response.status).toBe(200)
+  })
+
   it('does not expose capability routes without Agent Control binding', async () => {
     const response = await worker.fetch(
       new Request(

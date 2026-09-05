@@ -1,4 +1,5 @@
 export { default } from './index'
+export { AlohaUserState as AlohaConversationState } from './conversation-run-state'
 
 /**
  * Compatibility export for prior Agent Control deployments.

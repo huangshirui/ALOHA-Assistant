@@ -1,6 +1,6 @@
 import type {
+  CanonicalRunEnvelopeV1,
   RuntimeAdapter,
-  RuntimeRunRequest,
   RuntimeRunResult,
 } from '@aloha/contracts'
 
@@ -152,7 +152,7 @@ export class N8nAgentRuntimeAdapter implements RuntimeAdapter {
     this.fetchImpl = fetchImpl
   }
 
-  async run(request: RuntimeRunRequest): Promise<RuntimeRunResult> {
+  async run(envelope: CanonicalRunEnvelopeV1): Promise<RuntimeRunResult> {
     const webhookUrl = parseWebhookUrl(this.config.webhookUrl)
     const headers = new Headers({
       'content-type': 'application/json',
@@ -168,16 +168,7 @@ export class N8nAgentRuntimeAdapter implements RuntimeAdapter {
       response = await this.fetchImpl.call(undefined, webhookUrl, {
         method: 'POST',
         headers,
-        body: JSON.stringify({
-          schemaVersion: 1,
-          run: {
-            requestId: request.requestId,
-            runId: request.runId,
-            conversationId: request.conversationId,
-          },
-          input: request.input,
-          capabilities: request.capabilities,
-        }),
+        body: JSON.stringify(envelope),
       })
     } catch (error) {
       throw classifyFetchFailure(error)

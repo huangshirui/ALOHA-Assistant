@@ -1,4 +1,6 @@
 import type {
+  CanonicalRunEnvelopeV1,
+  CanonicalRunIdentity,
   CapabilityContext,
   InteractionInput,
   RunEvent,
@@ -12,11 +14,29 @@ import {
   N8nAgentRuntimeAdapter,
   N8nRuntimeError,
 } from '@aloha/runtime-n8n'
+import {
+  isLifeSpaceIdentityConfigured,
+  LifeSpaceIdentityError,
+  resolveLifeSpaceRunIdentity,
+} from './lifespace-identity'
+
+export { AlohaUserState } from './conversation-run-state'
+
+interface AgentControlStateStub {
+  fetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response>
+}
+
+interface AgentControlStateNamespace {
+  getByName(name: string): AgentControlStateStub
+}
 
 interface Env {
   N8N_AGENT_WEBHOOK_URL?: string
   N8N_AGENT_AUTH_TOKEN?: string
   CAPABILITY_GRANT_SIGNING_KEY?: string
+  LIFESPACE_IDENTITY_BASE_URL?: string
+  LIFESPACE_APPLICATION_CREDENTIAL?: string
+  ALOHA_STATE?: AgentControlStateNamespace
 }
 
 interface CapabilityGrantClaims {
@@ -25,7 +45,15 @@ interface CapabilityGrantClaims {
   runId: string
   applicationId: string
   scopes: string[]
+  principalId?: string
+  actorId?: string
   expiresAt: number
+}
+
+interface PersistedAdmission {
+  conversationId: string
+  runId: string
+  supersededRunId?: string
 }
 
 const ALOHA_APPLICATION_ID = 'aloha-assistant'
@@ -168,6 +196,9 @@ const verifyCapabilityGrant = async (
     claims.applicationId !== ALOHA_APPLICATION_ID ||
     !Array.isArray(claims.scopes) ||
     !claims.scopes.every((scope) => typeof scope === 'string') ||
+    (claims.principalId !== undefined &&
+      typeof claims.principalId !== 'string') ||
+    (claims.actorId !== undefined && typeof claims.actorId !== 'string') ||
     typeof claims.expiresAt !== 'number' ||
     claims.expiresAt <= Date.now()
   ) {
@@ -186,20 +217,32 @@ const allowedCapabilities = (context: CapabilityContext) =>
       capability.requiredScopes.every((scope) => context.scopes.includes(scope)),
   )
 
+const capabilityContext = (
+  runId: string,
+  identity: CanonicalRunIdentity | null,
+): CapabilityContext => ({
+  runId,
+  applicationId: ALOHA_APPLICATION_ID,
+  scopes: [],
+  ...(identity
+    ? {
+        principalId: identity.principal.id,
+        actorId: identity.actor.id,
+      }
+    : {}),
+})
+
 const runtimeCapabilityDescriptors = async (
   request: Request,
   runId: string,
-  signingKey?: string,
+  signingKey: string | undefined,
+  identity: CanonicalRunIdentity | null,
 ): Promise<RuntimeCapabilityDescriptor[]> => {
   if (!signingKey) {
     return []
   }
 
-  const context: CapabilityContext = {
-    runId,
-    applicationId: ALOHA_APPLICATION_ID,
-    scopes: [],
-  }
+  const context = capabilityContext(runId, identity)
   const origin = new URL(request.url).origin
   const descriptors: RuntimeCapabilityDescriptor[] = []
 
@@ -211,6 +254,8 @@ const runtimeCapabilityDescriptors = async (
         runId,
         applicationId: ALOHA_APPLICATION_ID,
         scopes: context.scopes,
+        principalId: context.principalId,
+        actorId: context.actorId,
         expiresAt: Date.now() + CAPABILITY_GRANT_TTL_MS,
       },
       signingKey,
@@ -298,6 +343,8 @@ const invokeCapability = async (
     runId: claims.runId,
     applicationId: claims.applicationId,
     scopes: claims.scopes,
+    ...(claims.principalId ? { principalId: claims.principalId } : {}),
+    ...(claims.actorId ? { actorId: claims.actorId } : {}),
   }
 
   if (
@@ -319,6 +366,110 @@ const invokeCapability = async (
   }
 }
 
+const stateRequest = async (
+  stub: AgentControlStateStub,
+  path: string,
+  body: unknown,
+): Promise<Response> =>
+  stub.fetch(`https://aloha-state.internal${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+
+const stateStubFor = (env: Env, principalId: string) =>
+  env.ALOHA_STATE?.getByName(principalId)
+
+const admitPersistedRun = async (
+  env: Env,
+  input: {
+    requestId: string
+    conversationId?: string
+    identity: CanonicalRunIdentity
+    text: string
+  },
+): Promise<PersistedAdmission | Response> => {
+  const stub = stateStubFor(env, input.identity.principal.id)
+
+  if (!stub) {
+    return json({ error: 'conversation_state_not_configured' }, 503)
+  }
+
+  const response = await stateRequest(stub, '/admit', {
+    requestId: input.requestId,
+    conversationId: input.conversationId,
+    principalId: input.identity.principal.id,
+    actorId: input.identity.actor.id,
+    applicationId: input.identity.application.id,
+    inputText: input.text,
+  })
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    const error = isRecord(payload) && typeof payload.error === 'string'
+      ? payload.error
+      : 'conversation_state_unavailable'
+    return json({ error }, response.status >= 500 ? 503 : response.status)
+  }
+
+  const payload = await response.json().catch(() => null)
+
+  if (
+    !isRecord(payload) ||
+    typeof payload.conversationId !== 'string' ||
+    typeof payload.runId !== 'string'
+  ) {
+    return json({ error: 'conversation_state_unavailable' }, 503)
+  }
+
+  return {
+    conversationId: payload.conversationId,
+    runId: payload.runId,
+    ...(typeof payload.supersededRunId === 'string'
+      ? { supersededRunId: payload.supersededRunId }
+      : {}),
+  }
+}
+
+const transitionPersistedRun = async (
+  env: Env,
+  principalId: string,
+  path: '/running' | '/complete' | '/fail',
+  body: Record<string, unknown>,
+): Promise<void> => {
+  const stub = stateStubFor(env, principalId)
+
+  if (!stub) {
+    throw new Error('conversation_state_not_configured')
+  }
+
+  const response = await stateRequest(stub, path, body)
+
+  if (!response.ok) {
+    throw new Error('conversation_state_unavailable')
+  }
+}
+
+const canonicalEnvelope = (input: {
+  requestId: string
+  runId: string
+  conversationId: string
+  text: string
+  identity: CanonicalRunIdentity | null
+  capabilities: RuntimeCapabilityDescriptor[]
+}): CanonicalRunEnvelopeV1 => ({
+  schemaVersion: 1,
+  run: {
+    requestId: input.requestId,
+    runId: input.runId,
+    conversationId: input.conversationId,
+  },
+  input: { text: input.text },
+  identity: input.identity,
+  context: { channel: 'web' },
+  capabilities: input.capabilities,
+})
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -332,8 +483,11 @@ export default {
       return json({
         service: 'aloha-agent-control',
         ok: true,
+        canonicalRunEnvelopeVersion: 1,
         capabilities: capabilityIds(),
         capabilityInvocationConfigured: Boolean(env.CAPABILITY_GRANT_SIGNING_KEY),
+        identityConfigured: isLifeSpaceIdentityConfigured(env),
+        conversationStateConfigured: Boolean(env.ALOHA_STATE),
         runtimeBackend: env.N8N_AGENT_WEBHOOK_URL ? 'n8n-agent' : null,
       })
     }
@@ -359,14 +513,68 @@ export default {
         return json({ error: 'runtime_backend_not_configured' }, 503)
       }
 
+      let identityResolution: Awaited<ReturnType<typeof resolveLifeSpaceRunIdentity>>
+
+      try {
+        identityResolution = await resolveLifeSpaceRunIdentity(request, env)
+      } catch (error) {
+        if (error instanceof LifeSpaceIdentityError) {
+          return json({ error: error.code }, error.status)
+        }
+        return json({ error: 'identity_resolution_failed' }, 502)
+      }
+
       const requestId = input.requestId ?? crypto.randomUUID()
-      const conversationId = input.conversationId ?? crypto.randomUUID()
-      const runId = crypto.randomUUID()
+      let conversationId: string
+      let runId: string
+
+      if (identityResolution.mode === 'trusted') {
+        const admission = await admitPersistedRun(env, {
+          requestId,
+          conversationId: input.conversationId,
+          identity: identityResolution.identity,
+          text,
+        })
+
+        if (admission instanceof Response) {
+          return admission
+        }
+
+        conversationId = admission.conversationId
+        runId = admission.runId
+
+        try {
+          await transitionPersistedRun(
+            env,
+            identityResolution.identity.principal.id,
+            '/running',
+            { runId },
+          )
+        } catch {
+          return json({ error: 'conversation_state_unavailable' }, 503)
+        }
+      } else {
+        // Transitional M1/M2 deployment verification only. There is no trusted
+        // Principal, therefore no durable user Conversation/Run is created.
+        conversationId = input.conversationId ?? crypto.randomUUID()
+        runId = crypto.randomUUID()
+      }
+
+      const identity = identityResolution.identity
       const capabilities = await runtimeCapabilityDescriptors(
         request,
         runId,
         env.CAPABILITY_GRANT_SIGNING_KEY,
+        identity,
       )
+      const envelope = canonicalEnvelope({
+        requestId,
+        runId,
+        conversationId,
+        text,
+        identity,
+        capabilities,
+      })
       const adapter = new N8nAgentRuntimeAdapter({
         webhookUrl: env.N8N_AGENT_WEBHOOK_URL,
         authToken: env.N8N_AGENT_AUTH_TOKEN,
@@ -396,13 +604,22 @@ export default {
             })
 
             try {
-              const result = await adapter.run({
-                requestId,
-                runId,
-                conversationId,
-                input: { text },
-                capabilities,
-              })
+              const result = await adapter.run(envelope)
+
+              if (identity) {
+                await transitionPersistedRun(
+                  env,
+                  identity.principal.id,
+                  '/complete',
+                  {
+                    runId,
+                    outputText: result.outputText,
+                    ...(result.backendRunId
+                      ? { backendRunId: result.backendRunId }
+                      : {}),
+                  },
+                )
+              }
 
               emit({
                 ...base(),
@@ -421,10 +638,30 @@ export default {
                       code: error.code,
                       retryable: error.retryable,
                     }
-                  : {
-                      code: 'runtime_execution_failed',
-                      retryable: false,
-                    }
+                  : error instanceof Error &&
+                      error.message === 'conversation_state_unavailable'
+                    ? {
+                        code: 'conversation_state_unavailable',
+                        retryable: true,
+                      }
+                    : {
+                        code: 'runtime_execution_failed',
+                        retryable: false,
+                      }
+
+              if (identity) {
+                try {
+                  await transitionPersistedRun(
+                    env,
+                    identity.principal.id,
+                    '/fail',
+                    { runId, errorCode: normalized.code },
+                  )
+                } catch {
+                  // The public event remains safe and useful even when the
+                  // persistence backend is temporarily unavailable.
+                }
+              }
 
               emit({
                 ...base(),

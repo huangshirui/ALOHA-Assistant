@@ -5,8 +5,21 @@
   "compatibility_date": "2026-09-01",
   "workers_dev": false,
   "preview_urls": false,
+  "keep_vars": true,
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ALOHA_STATE",
+        "class_name": "AlohaConversationState"
+      }
+    ]
+  },
   "exports": {
     "AlohaUserState": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    },
+    "AlohaConversationState": {
       "type": "durable-object",
       "storage": "sqlite"
     }
