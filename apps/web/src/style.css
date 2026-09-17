@@ -37,7 +37,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -55,22 +56,31 @@ button {
 
 .header,
 .composer {
-  display: grid;
-  align-items: center;
-  gap: var(--space-3);
-  padding: max(var(--space-3), env(safe-area-inset-top)) var(--space-4) var(--space-3);
+  padding-left: var(--space-4);
+  padding-right: var(--space-4);
 }
 
 .header {
+  display: grid;
   grid-template-columns: var(--size-control-sm) 1fr var(--size-control-sm);
+  align-items: center;
+  gap: var(--space-3);
+  padding-top: max(var(--space-3), env(safe-area-inset-top));
+  padding-bottom: var(--space-3);
   text-align: center;
 }
 
-.icon-button {
+.icon-button,
+.composer-icon,
+.capsule-center,
+.send-button {
   border: 0;
   background: var(--color-surface-transparent);
-  min-height: var(--size-control-sm);
   cursor: pointer;
+}
+
+.icon-button {
+  min-height: var(--size-control-sm);
 }
 
 .stage {
@@ -90,19 +100,22 @@ button {
 .placeholder-text,
 .error-text,
 .source-text,
-.output-text {
+.output-text,
+.composer-feedback {
   margin: 0;
 }
 
 .status,
 .surface-label,
 .placeholder-text,
-.source-text {
+.source-text,
+.composer-feedback {
   color: var(--color-text-muted);
 }
 
 .status,
-.surface-label {
+.surface-label,
+.composer-feedback {
   font-size: 0.875rem;
 }
 
@@ -132,37 +145,99 @@ button {
 }
 
 .composer {
-  grid-template-columns: 1fr auto;
-  padding: var(--space-3) var(--space-4) max(var(--space-3), env(safe-area-inset-bottom));
+  display: grid;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  padding-bottom: max(var(--space-3), env(safe-area-inset-bottom));
 }
 
-.composer input {
+.compact-capsule,
+.expanded-composer {
+  border: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-canvas);
+}
+
+.compact-capsule {
+  display: grid;
+  grid-template-columns: var(--size-control-md) 1fr var(--size-control-md);
+  align-items: center;
+  min-height: var(--size-control-md);
+  border-radius: var(--radius-pill);
+}
+
+.capsule-center {
+  min-height: var(--size-control-md);
+  color: var(--color-text-muted);
+  text-align: left;
+  padding: 0 var(--space-3);
+}
+
+.expanded-composer {
+  display: grid;
+  grid-template-columns: var(--size-control-sm) minmax(0, 1fr) var(--size-control-sm) auto;
+  align-items: end;
+  gap: var(--space-2);
+  border-radius: calc(var(--size-control-md) / 2);
+  padding: var(--space-2);
+}
+
+.composer textarea {
   width: 100%;
   min-height: var(--size-control-md);
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-pill);
+  max-height: 10rem;
+  border: 0;
+  outline: 0;
+  resize: vertical;
   background: var(--color-bg-canvas);
   color: var(--color-text-primary);
-  padding: 0 var(--space-4);
+  line-height: 1.5;
+  padding: var(--space-3) var(--space-2);
 }
 
-.composer button {
-  min-height: var(--size-control-md);
+.composer-icon {
+  width: var(--size-control-sm);
+  min-height: var(--size-control-sm);
+  border-radius: var(--radius-pill);
+}
+
+.send-button {
+  min-height: var(--size-control-sm);
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-pill);
-  background: var(--color-surface-transparent);
   padding: 0 var(--space-4);
-  cursor: pointer;
 }
 
 .composer button:disabled {
   cursor: default;
-  opacity: 0.45;
+  opacity: 0.4;
 }
 
-@media (max-width: 40rem) {
+.composer-feedback {
+  padding: 0 var(--space-2);
+}
+
+@media (max-width: 64rem) {
   .stage {
     align-items: flex-start;
     padding-top: var(--space-4);
+  }
+
+  .expanded-composer {
+    grid-template-columns: var(--size-control-sm) minmax(0, 1fr) var(--size-control-sm) auto;
+  }
+
+  .composer textarea {
+    resize: none;
+  }
+}
+
+@media (max-width: 36rem) {
+  .expanded-composer {
+    grid-template-columns: var(--size-control-sm) minmax(0, 1fr) var(--size-control-sm);
+  }
+
+  .send-button {
+    grid-column: 2 / 4;
+    justify-self: end;
   }
 }
