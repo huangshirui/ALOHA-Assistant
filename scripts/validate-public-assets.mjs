@@ -187,15 +187,29 @@ const validateM4 = async () => {
     'n8n-nodes-base.httpRequestTool',
     'M4',
   )
+  const describeTool = assertNode(
+    nodeByName,
+    'LifeSpace Describe',
+    'n8n-nodes-base.httpRequestTool',
+    'M4',
+  )
   const queryTool = assertNode(
     nodeByName,
     'LifeSpace Query',
     'n8n-nodes-base.httpRequestTool',
     'M4',
   )
+  const getTool = assertNode(
+    nodeByName,
+    'LifeSpace Get',
+    'n8n-nodes-base.httpRequestTool',
+    'M4',
+  )
 
   const discoverySerialized = JSON.stringify(discoveryTool.parameters)
+  const describeSerialized = JSON.stringify(describeTool.parameters)
   const querySerialized = JSON.stringify(queryTool.parameters)
+  const getSerialized = JSON.stringify(getTool.parameters)
   if (
     discoveryTool.parameters?.method !== 'POST' ||
     !discoverySerialized.includes('lifespace.read') ||
@@ -207,18 +221,41 @@ const validateM4 = async () => {
   }
 
   if (
+    describeTool.parameters?.method !== 'POST' ||
+    !describeSerialized.includes('lifespace.read') ||
+    !describeSerialized.includes("operation: 'describe'") ||
+    !describeSerialized.includes("$fromAI('spaceId'") ||
+    !describeSerialized.includes("$fromAI('modelKey'")
+  ) {
+    fail('M4 LifeSpace Describe must load semantics for a discovery-selected model key')
+  }
+
+  if (
     queryTool.parameters?.method !== 'POST' ||
     !querySerialized.includes('lifespace.read') ||
     !querySerialized.includes("operation: 'query'") ||
     !querySerialized.includes("$fromAI('spaceId'") ||
-    !querySerialized.includes("$fromAI('modelRoute'") ||
+    !querySerialized.includes("$fromAI('modelKey'") ||
+    !querySerialized.includes("search: { text:") ||
+    !querySerialized.includes("page: { limit:") ||
     !querySerialized.includes("$fromAI('search'") ||
     !querySerialized.includes("$fromAI('limit'")
   ) {
-    fail('M4 LifeSpace Query must use discovery-selected identifiers and AI-filled read query input')
+    fail('M4 LifeSpace Query must lower discovery-selected modelKey plus AI search/page input to Canonical Query')
   }
 
-  for (const name of ['LifeSpace Discover', 'LifeSpace Query']) {
+  if (
+    getTool.parameters?.method !== 'POST' ||
+    !getSerialized.includes('lifespace.read') ||
+    !getSerialized.includes("operation: 'get'") ||
+    !getSerialized.includes("$fromAI('spaceId'") ||
+    !getSerialized.includes("$fromAI('modelKey'") ||
+    !getSerialized.includes("$fromAI('recordId'")
+  ) {
+    fail('M4 LifeSpace Get must use discovery-selected identifiers and a LifeSpace record ID')
+  }
+
+  for (const name of ['LifeSpace Discover', 'LifeSpace Describe', 'LifeSpace Query', 'LifeSpace Get']) {
     const connections = workflow.connections?.[name]?.ai_tool?.[0]
     if (
       !Array.isArray(connections) ||
@@ -235,13 +272,19 @@ const validateM4 = async () => {
   if (
     typeof systemMessage !== 'string' ||
     !systemMessage.includes('LifeSpace Discover') ||
+    !systemMessage.includes('LifeSpace Describe') ||
+    !systemMessage.includes('Canonical Query') ||
     !systemMessage.includes('Do not attempt mutations')
   ) {
     fail('M4 AI Agent must explicitly treat discovery as prerequisite guidance and remain read-only')
   }
 
-  if (querySerialized.includes('lsp_pat_') || querySerialized.includes('lsa_')) {
+  const toolProjection = [discoverySerialized, describeSerialized, querySerialized, getSerialized].join('\n')
+  if (toolProjection.includes('lsp_pat_') || toolProjection.includes('lsa_')) {
     fail('M4 workflow must not contain a LifeSpace credential')
+  }
+  if (toolProjection.includes('modelRoute')) {
+    fail('M4 workflow must use LifeSpace modelKey rather than legacy modelRoute')
   }
 
   assertNoCredentials(workflow, 'M4 workflow template')
