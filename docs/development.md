@@ -97,7 +97,9 @@ At the first local dependency install:
 - Runtime Backend credentials and endpoints must be injected as deployment configuration and must not leak into public examples or documentation.
 - `N8N_AGENT_WEBHOOK_URL` is deployment-only runtime configuration even if the endpoint itself is not a credential.
 - `N8N_AGENT_AUTH_TOKEN` is a secret and must use the deployment platform's secret mechanism.
-- `CAPABILITY_GRANT_SIGNING_KEY` is a secret and must exist only at the trusted Agent Control boundary; never expose it to Gateway, browser code or n8n.
+- `CAPABILITY_GRANT_SIGNING_KEY`
+- `RUNTIME_TOOL_GRANT_SIGNING_KEY` — generated/preserved by production deployment for M4 Run-scoped Tool Grants
+- `LIFESPACE_CORE_API_BASE_URL` — deployment-only M4 Core endpoint; configure as a Worker Secret/binding, never as a tracked public value is a secret and must exist only at the trusted Agent Control boundary; never expose it to Gateway, browser code or n8n.
 - Short-lived Capability Grants may be delivered to the selected Runtime only for the specific Run/capability they authorize and must never be committed or logged into public artifacts.
 
 ## Cloudflare production deployment
