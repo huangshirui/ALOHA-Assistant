@@ -102,7 +102,7 @@ describe('LifeSpace read Runtime Tool', () => {
         })
       }
 
-      expect(url.toString()).toBe('https://core.example/api/v1/me/_discovery')
+      expect(url.toString()).toBe('https://core.example/api/v1/me/_discovery/inventory')
       expect(new Headers(init?.headers).get('authorization')).toBe(
         'Bearer synthetic-delegated-token',
       )
@@ -111,7 +111,7 @@ describe('LifeSpace read Runtime Tool', () => {
           spaces: [
             {
               spaceId: 'spc_synthetic',
-              models: [{ key: 'task', route: 'tasks', access: ['read'] }],
+              models: [{ modelKey: 'task', access: ['read'] }],
             },
           ],
         },
@@ -133,7 +133,7 @@ describe('LifeSpace read Runtime Tool', () => {
           spaces: [
             {
               spaceId: 'spc_synthetic',
-              models: [{ key: 'task', route: 'tasks', access: ['read'] }],
+              models: [{ modelKey: 'task', access: ['read'] }],
             },
           ],
         },
@@ -143,8 +143,9 @@ describe('LifeSpace read Runtime Tool', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2)
   })
 
-  it('forwards only read-only Generic Runtime query syntax and preserves LifeSpace denial', async () => {
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+  it('loads progressive model semantics and forwards Canonical Query without inventing model routes', async () => {
+    const coreRequests: Array<{ url: URL; init?: RequestInit }> = []
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input))
       if (url.origin === 'https://identity.example') {
         return Response.json({
@@ -157,12 +158,39 @@ describe('LifeSpace read Runtime Tool', () => {
         })
       }
 
-      expect(url.pathname).toBe('/api/v1/spaces/spc_synthetic/tasks')
-      expect(url.searchParams.get('q')).toBe('today')
-      expect(url.searchParams.getAll('sort')).toEqual([
-        'dueAt:asc',
-        'createdAt:desc',
-      ])
+      coreRequests.push({ url, init })
+      if (url.pathname === '/api/v1/spaces/spc_synthetic/_discovery/models/task') {
+        return Response.json({
+          data: {
+            key: 'task',
+            query: {
+              canonical: {
+                invocation: {
+                  method: 'POST',
+                  pathTemplate:
+                    '/api/v1/spaces/{spaceId}/models/{modelKey}/records/query',
+                },
+              },
+            },
+          },
+        })
+      }
+
+      expect(url.pathname).toBe(
+        '/api/v1/spaces/spc_synthetic/models/task/records/query',
+      )
+      expect(init?.method).toBe('POST')
+      expect(new Headers(init?.headers).get('content-type')).toBe(
+        'application/json',
+      )
+      expect(JSON.parse(String(init?.body))).toEqual({
+        search: { text: 'today' },
+        sort: [
+          { field: 'dueDate', direction: 'asc' },
+          { field: 'createdAt', direction: 'desc' },
+        ],
+        page: { limit: 20 },
+      })
       return Response.json(
         { error: { code: 'FORBIDDEN', message: 'Synthetic deny path' } },
         { status: 403 },
@@ -170,12 +198,29 @@ describe('LifeSpace read Runtime Tool', () => {
     })
     vi.stubGlobal('fetch', fetchImpl)
 
+    const describe = await invokeLifeSpaceReadTool(
+      await invocationRequest({
+        operation: 'describe',
+        spaceId: 'spc_synthetic',
+        modelKey: 'task',
+      }),
+      env,
+    )
+    expect(describe.status).toBe(200)
+
     const response = await invokeLifeSpaceReadTool(
       await invocationRequest({
         operation: 'query',
         spaceId: 'spc_synthetic',
-        modelRoute: 'tasks',
-        query: { q: 'today', sort: ['dueAt:asc', 'createdAt:desc'] },
+        modelKey: 'task',
+        query: {
+          search: { text: 'today' },
+          sort: [
+            { field: 'dueDate', direction: 'asc' },
+            { field: 'createdAt', direction: 'desc' },
+          ],
+          page: { limit: 20 },
+        },
       }),
       env,
     )
@@ -186,6 +231,7 @@ describe('LifeSpace read Runtime Tool', () => {
       status: 403,
       detail: { error: { code: 'FORBIDDEN' } },
     })
+    expect(coreRequests).toHaveLength(2)
   })
 
   it('rejects malformed tool grants before any LifeSpace request', async () => {
