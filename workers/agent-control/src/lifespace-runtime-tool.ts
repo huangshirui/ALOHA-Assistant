@@ -30,15 +30,20 @@ interface RuntimeToolGrantClaims {
 type LifeSpaceReadInput =
   | { operation: 'discover' }
   | {
+      operation: 'describe'
+      spaceId: string
+      modelKey: string
+    }
+  | {
       operation: 'query'
       spaceId: string
-      modelRoute: string
-      query?: Record<string, string | number | boolean | string[]>
+      modelKey: string
+      query?: Record<string, unknown>
     }
   | {
       operation: 'get'
       spaceId: string
-      modelRoute: string
+      modelKey: string
       recordId: string
     }
 
@@ -191,7 +196,7 @@ export const createLifeSpaceReadToolDescriptor = async (
     id: LIFESPACE_READ_TOOL_ID,
     name: 'LifeSpace Read',
     description:
-      'Read the current user-authorized LifeSpace shared reality. Use discover first to learn reachable Spaces, model routes, fields, query metadata and effective read authority; then query or get only models returned by discovery.',
+      'Read the current user-authorized LifeSpace shared reality. Use discover first for reachable Spaces/models, describe only the selected model for canonical query/field semantics, then query or get. Never invent model keys, fields, operators or authority.',
     inputSchema: {
       $schema: 'https://json-schema.org/draft/2020-12/schema',
       oneOf: [
@@ -204,32 +209,36 @@ export const createLifeSpaceReadToolDescriptor = async (
         {
           type: 'object',
           additionalProperties: false,
-          required: ['operation', 'spaceId', 'modelRoute'],
+          required: ['operation', 'spaceId', 'modelKey'],
+          properties: {
+            operation: { const: 'describe' },
+            spaceId: { type: 'string', minLength: 1 },
+            modelKey: { type: 'string', minLength: 1 },
+          },
+        },
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['operation', 'spaceId', 'modelKey'],
           properties: {
             operation: { const: 'query' },
             spaceId: { type: 'string', minLength: 1 },
-            modelRoute: { type: 'string', minLength: 1 },
+            modelKey: { type: 'string', minLength: 1 },
             query: {
               type: 'object',
-              additionalProperties: {
-                oneOf: [
-                  { type: 'string' },
-                  { type: 'number' },
-                  { type: 'boolean' },
-                  { type: 'array', items: { type: 'string' } },
-                ],
-              },
+              description:
+                'Canonical Query body constructed from the selected model semantic detail. LifeSpace Core remains the semantic validator.',
             },
           },
         },
         {
           type: 'object',
           additionalProperties: false,
-          required: ['operation', 'spaceId', 'modelRoute', 'recordId'],
+          required: ['operation', 'spaceId', 'modelKey', 'recordId'],
           properties: {
             operation: { const: 'get' },
             spaceId: { type: 'string', minLength: 1 },
-            modelRoute: { type: 'string', minLength: 1 },
+            modelKey: { type: 'string', minLength: 1 },
             recordId: { type: 'string', minLength: 1 },
           },
         },
@@ -268,13 +277,17 @@ const readInput = (value: unknown): LifeSpaceReadInput => {
   }
 
   const spaceId = stringField(value.spaceId, 'space_id')
-  const modelRoute = stringField(value.modelRoute, 'model_route')
+  const modelKey = stringField(value.modelKey, 'model_key')
+
+  if (value.operation === 'describe') {
+    return { operation: 'describe', spaceId, modelKey }
+  }
 
   if (value.operation === 'get') {
     return {
       operation: 'get',
       spaceId,
-      modelRoute,
+      modelKey,
       recordId: stringField(value.recordId, 'record_id'),
     }
   }
@@ -284,21 +297,12 @@ const readInput = (value: unknown): LifeSpaceReadInput => {
     if (query !== undefined && !isRecord(query)) {
       throw new LifeSpaceRuntimeToolError('invalid_query', 400)
     }
-    const normalizedQuery: Record<string, string | number | boolean | string[]> = {}
-    for (const [key, entry] of Object.entries(query ?? {})) {
-      const normalizedKey = stringField(key, 'query_key')
-      if (
-        typeof entry === 'string' ||
-        typeof entry === 'number' ||
-        typeof entry === 'boolean' ||
-        (Array.isArray(entry) && entry.every((item) => typeof item === 'string'))
-      ) {
-        normalizedQuery[normalizedKey] = entry
-        continue
-      }
-      throw new LifeSpaceRuntimeToolError('invalid_query_value', 400)
+    return {
+      operation: 'query',
+      spaceId,
+      modelKey,
+      query: query ? structuredClone(query) : {},
     }
-    return { operation: 'query', spaceId, modelRoute, query: normalizedQuery }
   }
 
   throw new LifeSpaceRuntimeToolError('unsupported_read_operation', 400)
@@ -347,27 +351,18 @@ const issueLifeSpaceAgentToken = async (
 }
 
 const corePath = (input: LifeSpaceReadInput): string => {
-  if (input.operation === 'discover') return '/me/_discovery'
+  if (input.operation === 'discover') return '/me/_discovery/inventory'
 
-  const collection = `/spaces/${encodeURIComponent(input.spaceId)}/${encodeURIComponent(input.modelRoute)}`
+  const space = `/spaces/${encodeURIComponent(input.spaceId)}`
+  if (input.operation === 'describe') {
+    return `${space}/_discovery/models/${encodeURIComponent(input.modelKey)}`
+  }
+
+  const collection = `${space}/models/${encodeURIComponent(input.modelKey)}/records`
   if (input.operation === 'get') {
     return `${collection}/${encodeURIComponent(input.recordId)}`
   }
-  return collection
-}
-
-const queryString = (input: LifeSpaceReadInput): string => {
-  if (input.operation !== 'query' || !input.query) return ''
-  const parameters = new URLSearchParams()
-  for (const [key, value] of Object.entries(input.query)) {
-    if (Array.isArray(value)) {
-      for (const entry of value) parameters.append(key, entry)
-    } else {
-      parameters.append(key, String(value))
-    }
-  }
-  const encoded = parameters.toString()
-  return encoded ? `?${encoded}` : ''
+  return `${collection}/query`
 }
 
 export const invokeLifeSpaceReadTool = async (
@@ -406,12 +401,15 @@ export const invokeLifeSpaceReadTool = async (
     // The delegated Core JWT exists only inside this trusted invocation and is
     // never placed in the Canonical Run Envelope or returned to the Runtime.
     const delegatedToken = await issueLifeSpaceAgentToken(claims, env)
-    const response = await fetch(`${coreBase}${corePath(input)}${queryString(input)}`, {
-      method: 'GET',
+    const isQuery = input.operation === 'query'
+    const response = await fetch(`${coreBase}${corePath(input)}`, {
+      method: isQuery ? 'POST' : 'GET',
       headers: {
         accept: 'application/json',
         authorization: `Bearer ${delegatedToken}`,
+        ...(isQuery ? { 'content-type': 'application/json' } : {}),
       },
+      ...(isQuery ? { body: JSON.stringify(input.query ?? {}) } : {}),
     })
     const payload = await response.json().catch(() => null)
 
