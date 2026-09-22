@@ -391,6 +391,12 @@ jobs:
           echo "::add-mask::${edge_url}"
           echo "url=${edge_url}" >> "$GITHUB_OUTPUT"
 
+      - name: Verify deployed M4 Runtime Tool callback gate
+        if: steps.m4.outputs.active == 'true'
+        env:
+          ALOHA_GATEWAY_URL: ${{ steps.edge.outputs.url }}
+        run: npm run verify:m4-runtime
+
       - name: Verify deployed M1 runtime path (legacy pre-M3)
         if: steps.identity.outputs.active != 'true'
         env:
