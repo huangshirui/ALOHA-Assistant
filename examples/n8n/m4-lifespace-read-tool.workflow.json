@@ -11,7 +11,10 @@
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2.1,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "id": "14111111-1111-4111-8111-111111111111",
       "name": "ALOHA Runtime Webhook",
       "webhookId": "24111111-1111-4111-8111-111111111111"
@@ -21,13 +24,16 @@
         "promptType": "define",
         "text": "={{ $json.body.input.text }}",
         "options": {
-          "systemMessage": "You are the execution backend for ALOHA Assistant M4. ALOHA may provide a LifeSpace Read tool through the trusted Run Envelope. When the user's request needs LifeSpace data, call LifeSpace Discover first and use only the Spaces, model routes, fields, query metadata and effective access returned by discovery. Then use LifeSpace Query for the needed read. Never invent Space IDs, model routes, fields, permissions, tool URLs, grants, identity or private context. Do not attempt mutations or actions in M4. If LifeSpace denies an operation, treat that denial as authoritative.",
+          "systemMessage": "You are the execution backend for ALOHA Assistant M4. ALOHA may provide a LifeSpace Read tool through the trusted Run Envelope. When the user's request needs LifeSpace data, call LifeSpace Discover first to learn reachable Spaces and model keys. Before querying or getting a selected model, call LifeSpace Describe for that Space + modelKey and follow its current fields and Canonical Query metadata. Never invent Space IDs, model keys, fields, operators, permissions, tool URLs, grants, identity or private context. Do not attempt mutations or actions in M4. If LifeSpace denies an operation, treat that denial as authoritative.",
           "returnIntermediateSteps": true
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
-      "position": [320, 0],
+      "position": [
+        320,
+        0
+      ],
       "id": "34111111-1111-4111-8111-111111111111",
       "name": "AI Agent"
     },
@@ -43,13 +49,16 @@
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
       "typeVersion": 1.3,
-      "position": [240, 280],
+      "position": [
+        240,
+        280
+      ],
       "id": "44111111-1111-4111-8111-111111111111",
       "name": "Example Chat Model"
     },
     {
       "parameters": {
-        "toolDescription": "Discover the current ALOHA user's effective LifeSpace read surface. Always call this before querying LifeSpace so you use only currently authorized Space IDs, model routes, fields and query metadata.",
+        "toolDescription": "Discover the current ALOHA user's effective LifeSpace read inventory. Always call this first. It returns reachable Space IDs and model keys under current authority; it does not grant authority by itself.",
         "method": "POST",
         "url": "={{ $('ALOHA Runtime Webhook').item.json.body.tools.find((tool) => tool.id === 'lifespace.read').invocation.url }}",
         "sendHeaders": true,
@@ -68,13 +77,16 @@
       },
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.3,
-      "position": [440, 280],
+      "position": [
+        440,
+        280
+      ],
       "id": "54111111-1111-4111-8111-111111111111",
       "name": "LifeSpace Discover"
     },
     {
       "parameters": {
-        "toolDescription": "Read a LifeSpace model collection after discovery. Use a Space ID and model route returned by LifeSpace Discover. Search is optional; pass an empty string when no full-text search is needed. M4 is read-only.",
+        "toolDescription": "Query a LifeSpace model after Discover and Describe. Use only a Space ID/modelKey returned by discovery and only fields/operators allowed by the model semantic detail. This M4 reference projection supports optional full-text search plus bounded page size and lowers them to LifeSpace Canonical Query.",
         "method": "POST",
         "url": "={{ $('ALOHA Runtime Webhook').item.json.body.tools.find((tool) => tool.id === 'lifespace.read').invocation.url }}",
         "sendHeaders": true,
@@ -88,12 +100,15 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ { input: { operation: 'query', spaceId: $fromAI('spaceId', 'A Space ID returned by LifeSpace Discover.', 'string'), modelRoute: $fromAI('modelRoute', 'A model route returned by LifeSpace Discover.', 'string'), query: { q: $fromAI('search', 'Optional full-text search value. Use an empty string when no search is needed.', 'string'), limit: $fromAI('limit', 'Maximum number of records to return, normally 20 or fewer.', 'number') } } } }}",
+        "jsonBody": "={{ { input: { operation: 'query', spaceId: $fromAI('spaceId', 'A Space ID returned by LifeSpace Discover.', 'string'), modelKey: $fromAI('modelKey', 'A model key returned by LifeSpace Discover and described by LifeSpace Describe.', 'string'), query: { ...($fromAI('search', 'Optional full-text search text allowed by the described model. Return an empty string when no search is needed.', 'string').trim() ? { search: { text: $fromAI('search', 'Optional full-text search text allowed by the described model. Return an empty string when no search is needed.', 'string').trim() } } : {}), page: { limit: $fromAI('limit', 'Maximum number of records to return, normally 20 or fewer.', 'number') } } } } }}",
         "options": {}
       },
       "type": "n8n-nodes-base.httpRequestTool",
       "typeVersion": 4.3,
-      "position": [640, 280],
+      "position": [
+        720,
+        280
+      ],
       "id": "64111111-1111-4111-8111-111111111111",
       "name": "LifeSpace Query"
     },
@@ -105,9 +120,68 @@
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.4,
-      "position": [680, 0],
+      "position": [
+        680,
+        0
+      ],
       "id": "74111111-1111-4111-8111-111111111111",
       "name": "Normalize Runtime Result"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Load current static semantic detail for one LifeSpace model after Discover. Use the returned Canonical Query invocation/fields/operators before Query or Get; this is semantic metadata, not authority.",
+        "method": "POST",
+        "url": "={{ $('ALOHA Runtime Webhook').item.json.body.tools.find((tool) => tool.id === 'lifespace.read').invocation.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $('ALOHA Runtime Webhook').item.json.body.tools.find((tool) => tool.id === 'lifespace.read').invocation.authorization }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { input: { operation: 'describe', spaceId: $fromAI('spaceId', 'A Space ID returned by LifeSpace Discover.', 'string'), modelKey: $fromAI('modelKey', 'A model key returned by LifeSpace Discover.', 'string') } } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [
+        560,
+        280
+      ],
+      "id": "59111111-1111-4111-8111-111111111111",
+      "name": "LifeSpace Describe"
+    },
+    {
+      "parameters": {
+        "toolDescription": "Get one LifeSpace record after Discover and Describe. Use only a Space ID/modelKey authorized by discovery and a record ID returned by LifeSpace.",
+        "method": "POST",
+        "url": "={{ $('ALOHA Runtime Webhook').item.json.body.tools.find((tool) => tool.id === 'lifespace.read').invocation.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $('ALOHA Runtime Webhook').item.json.body.tools.find((tool) => tool.id === 'lifespace.read').invocation.authorization }}"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ { input: { operation: 'get', spaceId: $fromAI('spaceId', 'A Space ID returned by LifeSpace Discover.', 'string'), modelKey: $fromAI('modelKey', 'A model key returned by LifeSpace Discover and described by LifeSpace Describe.', 'string'), recordId: $fromAI('recordId', 'A LifeSpace record ID returned by Query or another authorized read.', 'string') } } }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.3,
+      "position": [
+        880,
+        280
+      ],
+      "id": "69111111-1111-4111-8111-111111111111",
+      "name": "LifeSpace Get"
     }
   ],
   "pinData": {},
@@ -162,6 +236,28 @@
           {
             "node": "Normalize Runtime Result",
             "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LifeSpace Describe": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "LifeSpace Get": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
             "index": 0
           }
         ]
