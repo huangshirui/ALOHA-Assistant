@@ -92,6 +92,27 @@ Deployment-only Agent Control configuration for M4 is:
 
 No live value belongs in source control.
 
+## Cloudflare Access callback boundary
+
+The human `/v1/interactions` entry remains protected by Cloudflare Access. The external n8n Runtime, however, calls the ALOHA Tool callback at:
+
+```text
+/v1/runtime/tools/*
+```
+
+n8n has a short-lived ALOHA Runtime Tool Grant, not a human Access session. Therefore production must configure a **more-specific path Access application** for `/v1/runtime/tools/*` with a narrow `Bypass` policy, analogous to the existing M2 `/v1/runtime/capabilities/*` callback exception.
+
+This exception removes only the human Access-session requirement. The route is still protected by Agent Control's signed Tool Grant gate:
+
+- missing grant -> `401 runtime_tool_grant_required`;
+- malformed/expired grant -> `401 invalid_runtime_tool_grant`;
+- a valid grant is bound to the current Run, Principal, Agent Actor, ALOHA Application and expiry;
+- LifeSpace then independently rechecks current delegated authority.
+
+Do not bypass `/v1/interactions` and do not create a broader Worker-wide bypass.
+
+`npm run verify:m4-runtime` checks this deployment boundary without requiring a human Access session: it reaches the public Tool callback and requires ALOHA's own missing/invalid-grant 401 responses rather than an Access redirect or an unrelated 404.
+
 ## n8n workflow
 
 `examples/n8n/m4-lifespace-read-tool.workflow.json` is the credential-free reference workflow.
@@ -122,7 +143,7 @@ Source/integration verification must prove:
 - an out-of-authority read is denied by LifeSpace and is not converted into success by ALOHA;
 - no mutation/action path exists in M4.
 
-Deployment activation remains incomplete until the LifeSpace application/model/delegation prerequisites are provisioned and the real ALOHA -> n8n -> `lifespace.read` Golden Flow is verified.
+Deployment activation remains incomplete until the LifeSpace application/model/delegation prerequisites are provisioned, the narrow `/v1/runtime/tools/*` Access bypass passes `verify:m4-runtime`, and the real ALOHA -> n8n -> `lifespace.read` Golden Flow is verified.
 
 ## Non-goals
 
