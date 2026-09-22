@@ -158,6 +158,8 @@ Therefore:
 - LifeSpace **Core** is a high-value Tool provider;
 - using LifeSpace Identity does not require Agent Control to proxy all LifeSpace Core operations.
 
+The current M4 `lifespace.read` Tool is a deliberate mediated path, not a new universal rule: n8n receives only an ALOHA Run-scoped Tool Grant, while Agent Control mints and consumes the short-lived `resources:read` LifeSpace delegated Agent JWT inside the trusted invocation. M4 discovery is progressive (`inventory -> selected model semantic detail`), and query uses LifeSpace's structured Canonical Query with `spaceId + modelKey`; ALOHA does not own model routes, field/operator semantics or a second authorization cache.
+
 This also means the ALOHA MVP architecture itself can exist with non-LifeSpace Tools. LifeSpace Core is prioritized because of product value and because it is a major source of the user's shared reality, not because the Runtime Contract depends on LifeSpace Core.
 
 ## Context（上下文）
