@@ -167,6 +167,66 @@ jobs:
             echo "CAPABILITY_GRANT_SIGNING_KEY already exists; preserving the existing value."
           fi
 
+      - name: Ensure internal Runtime Tool signing secret
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          secrets_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/aloha-agent-control/secrets"
+          current_secrets="$(
+            curl --fail-with-body --silent --show-error \
+              "$secrets_url" \
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+          )"
+
+          has_tool_signing_key="$(
+            printf '%s' "$current_secrets" | node -e '
+              let input = "";
+              process.stdin.setEncoding("utf8");
+              process.stdin.on("data", (chunk) => (input += chunk));
+              process.stdin.on("end", () => {
+                const payload = JSON.parse(input);
+                if (payload.success !== true || !Array.isArray(payload.result)) {
+                  process.exit(1);
+                }
+                process.stdout.write(
+                  payload.result.some((item) => item?.name === "RUNTIME_TOOL_GRANT_SIGNING_KEY")
+                    ? "yes"
+                    : "no",
+                );
+              });
+            '
+          )"
+
+          if [ "$has_tool_signing_key" = "no" ]; then
+            runtime_tool_signing_key="$(openssl rand -hex 32)"
+            secret_payload="$(
+              RUNTIME_TOOL_SIGNING_KEY="$runtime_tool_signing_key" node -e '
+                process.stdout.write(JSON.stringify({
+                  name: "RUNTIME_TOOL_GRANT_SIGNING_KEY",
+                  type: "secret_text",
+                  text: process.env.RUNTIME_TOOL_SIGNING_KEY,
+                }));
+              '
+            )"
+
+            curl --fail-with-body --silent --show-error \
+              --request PUT \
+              "$secrets_url" \
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              --header "Content-Type: application/json" \
+              --data "$secret_payload" \
+              >/dev/null
+
+            unset runtime_tool_signing_key secret_payload
+            echo "Initialized RUNTIME_TOOL_GRANT_SIGNING_KEY on Agent Control."
+          else
+            echo "RUNTIME_TOOL_GRANT_SIGNING_KEY already exists; preserving the existing value."
+          fi
+
       - name: Detect trusted LifeSpace Identity activation
         id: identity
         env:
@@ -218,6 +278,73 @@ jobs:
               ;;
             *)
               echo "Unexpected LifeSpace Identity configuration state." >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Detect LifeSpace M4 Runtime Tool activation
+        id: m4
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          secrets_url="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/aloha-agent-control/secrets"
+          current_secrets="$(
+            curl --fail-with-body --silent --show-error \
+              "$secrets_url" \
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+          )"
+
+          m4_state="$(
+            printf '%s' "$current_secrets" | node -e '
+              let input = "";
+              process.stdin.setEncoding("utf8");
+              process.stdin.on("data", (chunk) => (input += chunk));
+              process.stdin.on("end", () => {
+                const payload = JSON.parse(input);
+                if (payload.success !== true || !Array.isArray(payload.result)) {
+                  process.exit(1);
+                }
+                const names = new Set(payload.result.map((item) => item?.name));
+                const identityActive =
+                  names.has("LIFESPACE_IDENTITY_BASE_URL") &&
+                  names.has("LIFESPACE_APPLICATION_CREDENTIAL");
+                const hasCore = names.has("LIFESPACE_CORE_API_BASE_URL");
+                const hasToolKey = names.has("RUNTIME_TOOL_GRANT_SIGNING_KEY");
+
+                if (identityActive && hasCore && hasToolKey) {
+                  process.stdout.write("active");
+                } else if (!hasCore) {
+                  process.stdout.write(identityActive ? "m3-only" : "legacy");
+                } else {
+                  process.stdout.write("partial");
+                }
+              });
+            '
+          )"
+
+          case "$m4_state" in
+            active)
+              echo "active=true" >> "$GITHUB_OUTPUT"
+              echo "LifeSpace M4 Runtime Tool configuration detected."
+              ;;
+            m3-only)
+              echo "active=false" >> "$GITHUB_OUTPUT"
+              echo "Trusted LifeSpace Identity is active, but M4 Core Tool configuration is not activated; lifespace.read remains fail-closed."
+              ;;
+            legacy)
+              echo "active=false" >> "$GITHUB_OUTPUT"
+              echo "LifeSpace trusted integration is not activated; M4 Tool remains unavailable."
+              ;;
+            partial)
+              echo "LifeSpace M4 configuration is partial; refusing deployment verification." >&2
+              exit 1
+              ;;
+            *)
+              echo "Unexpected LifeSpace M4 configuration state." >&2
               exit 1
               ;;
           esac
@@ -282,3 +409,14 @@ jobs:
           echo "Trusted LifeSpace Identity is active."
           echo "Unauthenticated legacy deployment smoke is intentionally disabled."
           echo "Complete the short-lived Access-authenticated M1, M2 and M3 acceptance gates documented in docs/m3-deployment-activation.md."
+
+      - name: Report M4 deployment gate
+        if: steps.identity.outputs.active == 'true'
+        shell: bash
+        run: |
+          if [ "${{ steps.m4.outputs.active }}" = "true" ]; then
+            echo "LifeSpace M4 Runtime Tool configuration is active."
+            echo "Run the Access-authenticated M4 Golden Flow documented in docs/m4-lifespace-read-tool.md before marking M4 deployed."
+          else
+            echo "LifeSpace M4 Runtime Tool configuration is not active; lifespace.read remains intentionally unavailable."
+          fi
