@@ -94,7 +94,7 @@ describe('M4 LifeSpace read path', () => {
         }
 
         if (url.origin === 'https://core.example') {
-          expect(url.pathname).toBe('/api/v1/me/_discovery')
+          expect(url.pathname).toBe('/api/v1/me/_discovery/inventory')
           expect(new Headers(init?.headers).get('authorization')).toBe(
             'Bearer synthetic-core-only-delegated-token',
           )
@@ -104,7 +104,7 @@ describe('M4 LifeSpace read path', () => {
                 {
                   spaceId: 'spc_m4',
                   models: [
-                    { key: 'task', route: 'tasks', access: ['read'] },
+                    { modelKey: 'task', access: ['read'] },
                   ],
                 },
               ],
@@ -150,7 +150,7 @@ describe('M4 LifeSpace read path', () => {
           spaces: [
             {
               spaceId: 'spc_m4',
-              models: [{ key: 'task', route: 'tasks', access: ['read'] }],
+              models: [{ modelKey: 'task', access: ['read'] }],
             },
           ],
         },
