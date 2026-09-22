@@ -1,7 +1,10 @@
 import { readFile } from 'node:fs/promises'
 
+const readText = (relativePath) =>
+  readFile(new URL(relativePath, import.meta.url), 'utf8')
+
 const readWorkflow = async (relativePath) => {
-  const source = await readFile(new URL(relativePath, import.meta.url), 'utf8')
+  const source = await readText(relativePath)
   return JSON.parse(source)
 }
 
@@ -290,8 +293,45 @@ const validateM4 = async () => {
   assertNoCredentials(workflow, 'M4 workflow template')
 }
 
+const validateM4Deployment = async () => {
+  const deployment = await readText('../.github/workflows/deploy.yml')
+  const agentControlConfig = await readText('../workers/agent-control/wrangler.jsonc')
+
+  for (const name of [
+    'LIFESPACE_IDENTITY_BASE_URL',
+    'LIFESPACE_APPLICATION_CREDENTIAL',
+    'LIFESPACE_CORE_API_BASE_URL',
+    'RUNTIME_TOOL_GRANT_SIGNING_KEY',
+  ]) {
+    if (!deployment.includes(name)) {
+      fail(`M4 deployment gate must account for ${name}`)
+    }
+  }
+
+  if (
+    !deployment.includes('Ensure internal Runtime Tool signing secret') ||
+    !deployment.includes('Detect LifeSpace M4 Runtime Tool activation') ||
+    !deployment.includes('m3-only') ||
+    !deployment.includes('partial')
+  ) {
+    fail('M4 deployment must preserve fail-closed activation states')
+  }
+
+  if (!agentControlConfig.includes('"keep_vars": true')) {
+    fail('Agent Control deployment must preserve deployment-only bindings/secrets')
+  }
+
+  if (
+    agentControlConfig.includes('LIFESPACE_CORE_API_BASE_URL') ||
+    agentControlConfig.includes('RUNTIME_TOOL_GRANT_SIGNING_KEY')
+  ) {
+    fail('M4 optional activation bindings must not be hard-coded into public Wrangler config')
+  }
+}
+
 await validateM1()
 await validateM2()
 await validateM4()
+await validateM4Deployment()
 
 console.log('Public runtime assets validated.')
