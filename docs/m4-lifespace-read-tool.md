@@ -16,9 +16,9 @@ For an authenticated ALOHA Run:
    - a short-lived, Run-scoped ALOHA Runtime Tool Grant.
 4. n8n calls the ALOHA Tool endpoint. It never receives a LifeSpace application credential, Service API Token or delegated Agent JWT.
 5. Agent Control validates the Run-scoped Tool Grant and requests a fresh LifeSpace delegated Agent token with only `resources:read`.
-6. Agent Control immediately consumes that Core-only token for the requested LifeSpace GET operation.
+6. Agent Control immediately consumes that Core-only token for the requested LifeSpace read operation. Discovery/semantic detail/Get use GET; Canonical Query uses the current structured POST query transport.
 7. LifeSpace Core re-evaluates current Application × Model Access, User -> Agent Delegation, Space/Data Grant, model policy and published model capability.
-8. Runtime Discovery or the read result is returned to n8n; LifeSpace credentials are not returned.
+8. Runtime Discovery, model semantic detail or the read result is returned to n8n; LifeSpace credentials are not returned.
 
 The resulting trust path is:
 
@@ -32,7 +32,7 @@ Browser
               -> n8n Agent
                    -> ALOHA lifespace.read invocation
                         -> LifeSpace Identity: delegated Agent token (resources:read)
-                        -> LifeSpace Core: discovery / query / get
+                        -> LifeSpace Core: inventory / model detail / canonical query / get
 ```
 
 ## Capability vs Tool
@@ -48,15 +48,16 @@ The additive optional `tools` field keeps Canonical Run Envelope v1 compatible w
 
 ## M4 read contract
 
-`lifespace.read` intentionally exposes only three read operations:
+`lifespace.read` exposes four read-only operations aligned to the current LifeSpace generic-consumer contract:
 
-- `discover` — call LifeSpace `/me/_discovery` and learn the currently reachable Spaces, model routes, fields, query metadata and effective access;
-- `query` — GET a discovered model collection using the published Generic Runtime query syntax;
-- `get` — GET one record from a discovered model route.
+- `discover` — call `GET /me/_discovery/inventory` for the compact, current-authority Space/model inventory;
+- `describe` — call `GET /spaces/{spaceId}/_discovery/models/{modelKey}` only for the selected model and load its fields plus `query.canonical` semantic descriptor;
+- `query` — call `POST /spaces/{spaceId}/models/{modelKey}/records/query` with a structured Canonical Query body;
+- `get` — call `GET /spaces/{spaceId}/models/{modelKey}/records/{recordId}`.
 
-The Tool does not contain a copied Task schema. A Runtime must discover model routes and query metadata before it queries them.
+The Tool does not contain a copied Task schema or a copied per-model route. The stable Generic Runtime address is derived from `spaceId + modelKey`; model-specific fields, operators, sort/context requirements and current access come from LifeSpace Discovery/semantic detail.
 
-The ALOHA adapter validates transport shape and allows only GET-class behavior. LifeSpace remains responsible for deciding whether a requested model/Space/query is currently authorized and semantically valid.
+The ALOHA adapter validates only the ALOHA Tool transport/read-operation envelope and never treats its own input shape as LifeSpace semantic authority. For `query`, the controlled n8n reference workflow exposes a small Agent-friendly projection (optional search + bounded page size) and lowers it to the same structured Canonical Query. LifeSpace Core remains responsible for validating the resulting query semantics and current authorization.
 
 ## Authority target
 
@@ -95,12 +96,14 @@ No live value belongs in source control.
 
 `examples/n8n/m4-lifespace-read-tool.workflow.json` is the credential-free reference workflow.
 
-The workflow connects two HTTP Request Tools to the n8n AI Agent:
+The workflow connects four HTTP Request Tools to the n8n AI Agent:
 
-- `LifeSpace Discover` — fixed `discover` call;
-- `LifeSpace Query` — query parameters selected by the model only after discovery.
+- `LifeSpace Discover` — compact current-authority inventory;
+- `LifeSpace Describe` — progressive semantic detail for one selected `spaceId + modelKey`;
+- `LifeSpace Query` — a small search/page projection lowered to structured Canonical Query only after Describe;
+- `LifeSpace Get` — one-record read using a LifeSpace record ID.
 
-Both nodes read the invocation URL and Authorization value dynamically from `body.tools`. The workflow therefore does not contain a LifeSpace credential or a hard-coded LifeSpace model route.
+All four nodes read the invocation URL and Authorization value dynamically from `body.tools`. The workflow therefore contains neither a LifeSpace credential nor a hard-coded LifeSpace model route/Task schema.
 
 The system prompt is behavioral guidance only. Enforcement remains in Agent Control and LifeSpace.
 
@@ -111,10 +114,11 @@ Source/integration verification must prove:
 - trusted Run identity preserves User Principal / Agent Actor / Application Context;
 - unconfigured M4 environments expose no LifeSpace Tool;
 - n8n receives an ALOHA Run-scoped Tool Grant but no LifeSpace credential;
-- invoking `discover` causes Agent Control to mint a delegated token with only `resources:read`;
+- invoking any LifeSpace read operation causes Agent Control to mint a delegated token with only `resources:read`;
 - the delegated token is used only on the trusted Agent Control -> LifeSpace Core hop;
-- Runtime Discovery returns only current LifeSpace-authorized surfaces;
-- representative Task query/read succeeds once LifeSpace M4 authority is provisioned;
+- compact Runtime Discovery returns only current LifeSpace-authorized surfaces;
+- model semantic detail is loaded progressively and supplies the current Canonical Query descriptor without an ALOHA schema copy;
+- representative Task Canonical Query/Get succeeds once LifeSpace M4 authority is provisioned;
 - an out-of-authority read is denied by LifeSpace and is not converted into success by ALOHA;
 - no mutation/action path exists in M4.
 
