@@ -24,7 +24,8 @@
     "verify:m2-runtime": "node scripts/verify-m2-runtime.mjs",
     "verify:m3-runtime": "node scripts/verify-m3-runtime.mjs",
     "validate:assets": "node scripts/validate-public-assets.mjs",
-    "check": "npm run typecheck && npm run test && npm run validate:assets && npm run build"
+    "check": "npm run typecheck && npm run test && npm run validate:assets && npm run build",
+    "verify:m4-runtime": "node scripts/verify-m4-runtime.mjs"
   },
   "devDependencies": {
     "vitest": "^4.1.11"
