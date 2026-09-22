@@ -13,6 +13,10 @@ const isRuntimeCapabilityInvocation = (request: Request, pathname: string) =>
   request.method === 'POST' &&
   /^\/v1\/runtime\/capabilities\/[^/]+\/invoke$/u.test(pathname)
 
+const isRuntimeToolInvocation = (request: Request, pathname: string) =>
+  request.method === 'POST' &&
+  /^\/v1\/runtime\/tools\/[^/]+\/invoke$/u.test(pathname)
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url)
@@ -23,7 +27,8 @@ export default {
 
     if (
       (url.pathname === '/v1/interactions' && request.method === 'POST') ||
-      isRuntimeCapabilityInvocation(request, url.pathname)
+      isRuntimeCapabilityInvocation(request, url.pathname) ||
+      isRuntimeToolInvocation(request, url.pathname)
     ) {
       if (!env.AGENT_CONTROL) {
         return json({ error: 'agent_control_binding_not_configured' }, 503)

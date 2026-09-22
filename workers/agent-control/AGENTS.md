@@ -6,6 +6,8 @@ In the current Cloudflare MVP deployment, Agent Control is an internal-only Work
 
 M2 Direct Capability invocation uses deployment-only `CAPABILITY_GRANT_SIGNING_KEY` to mint and verify short-lived, Run-scoped Capability Grants（能力授权令牌）. If the signing key is absent, expose no runtime-callable capabilities. Never replace these narrow grants with a static broad Runtime credential merely for convenience.
 
+M4 LifeSpace Read uses an independent deployment-only `RUNTIME_TOOL_GRANT_SIGNING_KEY`. The Tool must remain absent unless the complete trusted path is configured: LifeSpace Identity base + ALOHA application credential + LifeSpace Core base + Runtime Tool signing key. n8n receives only the Run-scoped ALOHA Tool Grant; the `lsa_*` credential and Core-only delegated Agent JWT remain inside Agent Control.
+
 ## Rules
 
 - Own verified Identity / Principal context, authorization context, Context Envelope assembly/policy, Capability exposure policy, confirmation policy, Conversation / Run product semantics, Runtime selection and canonical event normalization.

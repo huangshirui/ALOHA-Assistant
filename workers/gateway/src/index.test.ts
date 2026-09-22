@@ -38,6 +38,43 @@ describe('gateway routing', () => {
     expect(response.status).toBe(200)
   })
 
+  it('forwards runtime tool invocation to Agent Control unchanged', async () => {
+    const binding = {
+      fetch: vi.fn(async (request: Request) => {
+        expect(request.url).toBe(
+          'https://example.com/v1/runtime/tools/lifespace.read/invoke',
+        )
+        expect(request.headers.get('authorization')).toBe(
+          'Bearer synthetic-tool-grant',
+        )
+        await expect(request.json()).resolves.toEqual({
+          input: { operation: 'discover' },
+        })
+        return Response.json({ toolId: 'lifespace.read', output: { data: {} } })
+      }),
+    }
+
+    const response = await worker.fetch(
+      new Request(
+        'https://example.com/v1/runtime/tools/lifespace.read/invoke',
+        {
+          method: 'POST',
+          headers: {
+            authorization: 'Bearer synthetic-tool-grant',
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({
+            input: { operation: 'discover' },
+          }),
+        },
+      ),
+      { AGENT_CONTROL: binding },
+    )
+
+    expect(binding.fetch).toHaveBeenCalledTimes(1)
+    expect(response.status).toBe(200)
+  })
+
   it('preserves the server-visible Cloudflare Access assertion for Agent Control identity resolution', async () => {
     const binding = {
       fetch: vi.fn(async (request: Request) => {
@@ -66,12 +103,12 @@ describe('gateway routing', () => {
     expect(response.status).toBe(200)
   })
 
-  it('does not expose capability routes without Agent Control binding', async () => {
+  it.each([
+    '/v1/runtime/capabilities/math.calculate/invoke',
+    '/v1/runtime/tools/lifespace.read/invoke',
+  ])('does not expose runtime callback route %s without Agent Control binding', async (path) => {
     const response = await worker.fetch(
-      new Request(
-        'https://example.com/v1/runtime/capabilities/math.calculate/invoke',
-        { method: 'POST' },
-      ),
+      new Request(`https://example.com${path}`, { method: 'POST' }),
       {},
     )
 

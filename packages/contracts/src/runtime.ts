@@ -15,6 +15,12 @@ export interface CanonicalRunEnvelopeV1 {
   identity: CanonicalRunIdentity | null
   context: CanonicalRunContext
   capabilities: RuntimeCapabilityDescriptor[]
+  /**
+   * Runtime-native/provider tools are deliberately separate from
+   * ALOHA-managed capabilities. Optional keeps Canonical Run Envelope v1
+   * source-compatible with M1-M3 runtimes that do not consume provider tools.
+   */
+  tools?: RuntimeToolDescriptor[]
 }
 
 export interface CanonicalRunIdentity {
@@ -49,7 +55,27 @@ export interface RuntimeCapabilityDescriptor {
   invocation: RuntimeCapabilityInvocation
 }
 
+/**
+ * Describes a callable tool owned by an independent provider or adapter.
+ * Presence in the envelope is not an authorization proof for the provider;
+ * the invocation transport remains narrow and the provider re-authorizes.
+ */
+export interface RuntimeToolDescriptor {
+  id: string
+  name: string
+  description: string
+  inputSchema: CapabilityJsonSchema
+  invocation: RuntimeToolInvocation
+}
+
 export interface RuntimeCapabilityInvocation {
+  type: 'http'
+  method: 'POST'
+  url: string
+  authorization: string
+}
+
+export interface RuntimeToolInvocation {
   type: 'http'
   method: 'POST'
   url: string
